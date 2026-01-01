@@ -1603,4 +1603,1042 @@ export const sharedState = {
 
 ```javascript
 
+// Формат: ENTITY_ACTION или ACTION_STATUS
+
+// ✅ Хорошо
+'MESSAGE_SENT'
+'MESSAGE_RECEIVED'
+'USER_LOGGED_IN'
+'CONTACT_ADDED'
+'SETTINGS_CHANGED'
+'CRYPTO_ENCRYPTION_FAILED'
+
+// ❌ Плохо
+'send-message'      // kebab-case
+'MessageSent'       // PascalCase
+'msg_sent'          // сокращения
+'SENT'              // неясно что
 ```
+
+### Priority Guidelines
+
+| Event Type | Priority | Example |
+|------------|----------|---------|
+| Critical messages | HIGH | `MESSAGE_RECEIVED`, `AUTH_SUCCESS` |
+| User actions | MEDIUM | `CONTACT_SELECTED`, `SETTINGS_CHANGED` |
+| UI updates | LOW | `TYPING_STARTED`, `PRESENCE_CHANGED` |
+| Analytics | LOW | `PAGE_VIEW`, `BUTTON_CLICKED` |
+
+---
+
+## 🆕 Добавление новой фичи
+
+### Пошаговый guide
+
+Допустим, хотим добавить фичу "voice messages" (голосовые сообщения).
+
+#### Шаг 1: Создаём структуру
+
+```bash
+mkdir -p src/features/voice-messages
+cd src/features/voice-messages
+
+touch index.js
+touch voice-messages.machine.js
+touch voice-messages.service.js
+touch voice-messages.ui.js
+touch voice-messages.events.js  # опционально
+```
+
+#### Шаг 2: Определяем контракт
+
+**`features/voice-messages/index.js`:**
+
+```javascript
+import { voiceMessagesMachine } from './voice-messages.machine.js';
+import { VoiceMessagesService } from './voice-messages.service.js';
+import { spawn } from 'xstate';
+
+export const voiceMessagesFeature = {
+  id: 'voice-messages',
+  name: 'Voice Messages',
+  version: '1.0.0',
+  
+  // Зависимости
+  dependencies: [
+    'chat',        // нужен для отправки сообщений
+    'crypto',      // нужен для шифрования аудио
+    'persistence'  // нужен для кеширования
+  ],
+  
+  async onMount(context) {
+    const { actorRegistry } = context;
+    
+    // Создаём сервис
+    const service = new VoiceMessagesService();
+    
+    // Spawn machine
+    const actor = spawn(voiceMessagesMachine, {
+      id: 'voice-messages',
+      input: { service, context }
+    });
+    
+    actorRegistry.register('voice-messages', actor, {
+      type: 'feature',
+      featureId: 'voice-messages'
+    });
+    
+    console.log('🎤 Voice Messages feature mounted');
+    
+    return { actor, service };
+  },
+  
+  async onUnmount(context) {
+    // Останавливаем запись, если идёт
+    const { service } = context;
+    if (service) {
+      await service.stopRecording();
+    }
+    
+    context.actorRegistry.unregister('voice-messages');
+    
+    console.log('🎤 Voice Messages feature unmounted');
+  },
+  
+  // События, которые слушаем
+  subscribedEvents: [
+    'CONVERSATION_OPENED',  // когда открыли диалог
+    'CONVERSATION_CLOSED'   // когда закрыли
+  ],
+  
+  // События, которые отправляем
+  emittedEvents: [
+    'VOICE_RECORDING_STARTED',
+    'VOICE_RECORDING_STOPPED',
+    'VOICE_MESSAGE_SENT',
+    'VOICE_MESSAGE_FAILED'
+  ],
+  
+  // UI компоненты
+  ui: {
+    components: {
+      VoiceRecorder: () => import('./voice-messages.ui.js').then(m => m.VoiceRecorder),
+      VoicePlayer: () => import('./voice-messages.ui.js').then(m => m.VoicePlayer)
+    }
+  },
+  
+  // Настройки по умолчанию
+  settings: {
+    maxDuration: 120000,  // 2 минуты
+    format: 'webm',
+    codec: 'opus'
+  }
+};
+```
+
+#### Шаг 3: Реализуем machine
+
+**`features/voice-messages/voice-messages.machine.js`:**
+
+```javascript
+import { setup, fromPromise } from 'xstate';
+
+export const voiceMessagesMachine = setup({
+  types: {
+    context: {} as {
+      isRecording: boolean,
+      audioBlob: Blob | null,
+      duration: number,
+      error: string | null
+    }
+  },
+  
+  actors: {
+    startRecording: fromPromise(async ({ input }) => {
+      const { service } = input;
+      return await service.startRecording();
+    }),
+    
+    stopRecording: fromPromise(async ({ input }) => {
+      const { service } = input;
+      return await service.stopRecording();
+    }),
+    
+    sendVoiceMessage: fromPromise(async ({ input }) => {
+      const { audioBlob, contactId, cryptoService } = input;
+      
+      // Конвертируем в base64
+      const base64 = await blobToBase64(audioBlob);
+      
+      // Шифруем
+      const encrypted = await cryptoService.encrypt(base64);
+      
+      // Отправляем через chat feature (событие)
+      return { encrypted, contactId };
+    })
+  }
+}).createMachine({
+  id: 'voice-messages',
+  
+  initial: 'idle',
+  
+  context: {
+    isRecording: false,
+    audioBlob: null,
+    duration: 0,
+    error: null
+  },
+  
+  states: {
+    idle: {
+      on: {
+        START_RECORDING: 'recording'
+      }
+    },
+    
+    recording: {
+      entry: assign({
+        isRecording: true,
+        duration: 0,
+        audioBlob: null
+      }),
+      
+      invoke: {
+        src: 'startRecording',
+        input: ({ context }) => ({ service: context.service }),
+        onDone: {
+          target: 'recorded',
+          actions: assign({
+            audioBlob: ({ event }) => event.output.blob,
+            duration: ({ event }) => event.output.duration
+          })
+        },
+        onError: {
+          target: 'error',
+          actions: assign({
+            error: ({ event }) => event.error.message
+          })
+        }
+      },
+      
+      on: {
+        STOP_RECORDING: 'stopping',
+        CANCEL_RECORDING: 'idle'
+      }
+    },
+    
+    stopping: {
+      invoke: {
+        src: 'stopRecording',
+        input: ({ context }) => ({ service: context.service }),
+        onDone: {
+          target: 'recorded',
+          actions: assign({
+            audioBlob: ({ event }) => event.output.blob,
+            duration: ({ event }) => event.output.duration,
+            isRecording: false
+          })
+        }
+      }
+    },
+    
+    recorded: {
+      on: {
+        SEND: 'sending',
+        CANCEL: 'idle',
+        RE_RECORD: 'recording'
+      }
+    },
+    
+    sending: {
+      invoke: {
+        src: 'sendVoiceMessage',
+        input: ({ context, event }) => ({
+          audioBlob: context.audioBlob,
+          contactId: event.contactId,
+          cryptoService: event.cryptoService
+        }),
+        onDone: {
+          target: 'idle',
+          actions: [
+            assign({
+              audioBlob: null,
+              duration: 0
+            }),
+            sendParent(({ event }) => ({
+              type: 'VOICE_MESSAGE_SENT',
+              ...event.output
+            }))
+          ]
+        },
+        onError: {
+          target: 'error',
+          actions: [
+            assign({
+              error: ({ event }) => event.error.message
+            }),
+            sendParent({
+              type: 'VOICE_MESSAGE_FAILED'
+            })
+          ]
+        }
+      }
+    },
+    
+    error: {
+      on: {
+        RETRY: 'idle',
+        DISMISS: 'idle'
+      }
+    }
+  }
+});
+
+async function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+```
+
+#### Шаг 4: Реализуем service
+
+**`features/voice-messages/voice-messages.service.js`:**
+
+```javascript
+export class VoiceMessagesService {
+  constructor() {
+    this.mediaRecorder = null;
+    this.audioChunks = [];
+    this.stream = null;
+    this.startTime = null;
+  }
+  
+  async startRecording() {
+    // Запрашиваем разрешение на микрофон
+    this.stream = await navigator.mediaDevices.getUserMedia({ 
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true
+      }
+    });
+    
+    this.mediaRecorder = new MediaRecorder(this.stream, {
+      mimeType: 'audio/webm;codecs=opus'
+    });
+    
+    this.audioChunks = [];
+    this.startTime = Date.now();
+    
+    this.mediaRecorder.ondataavailable = (e) => {
+      this.audioChunks.push(e.data);
+    };
+    
+    this.mediaRecorder.start();
+    
+    return new Promise((resolve, reject) => {
+      this.mediaRecorder.onstop = () => {
+        const blob = new Blob(this.audioChunks, { type: 'audio/webm' });
+        const duration = Date.now() - this.startTime;
+        
+        // Останавливаем stream
+        this.stream.getTracks().forEach(track => track.stop());
+        
+        resolve({ blob, duration });
+      };
+      
+      this.mediaRecorder.onerror = reject;
+    });
+  }
+  
+  async stopRecording() {
+    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+      this.mediaRecorder.stop();
+    }
+  }
+  
+  async cancelRecording() {
+    if (this.mediaRecorder) {
+      this.mediaRecorder.stop();
+      this.audioChunks = [];
+      
+      if (this.stream) {
+        this.stream.getTracks().forEach(track => track.stop());
+      }
+    }
+  }
+}
+```
+
+#### Шаг 5: Реализуем UI
+
+**`features/voice-messages/voice-messages.ui.js`:**
+
+```javascript
+import { LitElement, html, css } from 'lit';
+
+export class VoiceRecorder extends LitElement {
+  static properties = {
+    voiceActor: { type: Object },
+    state: { type: Object }
+  };
+  
+  static styles = css`
+    :host {
+      display: block;
+    }
+    
+    .recorder {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem;
+      background: var(--color-surface);
+      border-radius: 1rem;
+    }
+    
+    button {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 0.5rem;
+      cursor: pointer;
+    }
+    
+    .record-btn {
+      background: var(--color-error);
+      color: white;
+    }
+    
+    .recording {
+      animation: pulse 1s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  `;
+  
+  connectedCallback() {
+    super.connectedCallback();
+    
+    if (this.voiceActor) {
+      this.unsubscribe = this.voiceActor.subscribe((snapshot) => {
+        this.state = snapshot;
+        this.requestUpdate();
+      });
+    }
+  }
+  
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this.unsubscribe) {
+      this.unsubscribe();
+    }
+  }
+  
+  handleRecord() {
+    if (this.state.matches('idle')) {
+      this.voiceActor.send({ type: 'START_RECORDING' });
+    } else if (this.state.matches('recording')) {
+      this.voiceActor.send({ type: 'STOP_RECORDING' });
+    }
+  }
+  
+  handleSend() {
+    this.voiceActor.send({ 
+      type: 'SEND',
+      contactId: this.contactId,
+      cryptoService: this.cryptoService
+    });
+  }
+  
+  handleCancel() {
+    this.voiceActor.send({ type: 'CANCEL' });
+  }
+  
+  render() {
+    if (!this.state) {
+      return html``;
+    }
+    
+    const isIdle = this.state.matches('idle');
+    const isRecording = this.state.matches('recording');
+    const isRecorded = this.state.matches('recorded');
+    const isSending = this.state.matches('sending');
+    
+    return html`
+      <div class="recorder">
+        ${isIdle || isRecording ? html`
+          <button 
+            class="record-btn ${isRecording ? 'recording' : ''}"
+            @click=${this.handleRecord}
+          >
+            ${isRecording ? '⏸️ Stop' : '🎤 Record'}
+          </button>
+          
+          ${isRecording ? html`
+            <span class="duration">
+              ${this.formatDuration(this.state.context.duration)}
+            </span>
+          ` : ''}
+        ` : ''}
+        
+        ${isRecorded ? html`
+          <button @click=${this.handleSend}>
+            ✅ Send
+          </button>
+          <button @click=${this.handleCancel}>
+            ❌ Cancel
+          </button>
+          <span>
+            Duration: ${this.formatDuration(this.state.context.duration)}
+          </span>
+        ` : ''}
+        
+        ${isSending ? html`
+          <span>Sending...</span>
+        ` : ''}
+      </div>
+    `;
+  }
+  
+  formatDuration(ms) {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+}
+
+customElements.define('voice-recorder', VoiceRecorder);
+
+
+export class VoicePlayer extends LitElement {
+  // ... аналогично
+}
+
+customElements.define('voice-player', VoicePlayer);
+```
+
+#### Шаг 6: Регистрируем фичу
+
+**`runtime/bootstrap.js`:**
+
+```javascript
+import { voiceMessagesFeature } from '../features/voice-messages/index.js';
+
+export async function bootstrap() {
+  // ... остальные фичи
+  
+  // Добавляем новую фичу
+  featureRegistry.register(voiceMessagesFeature);
+  
+  // Всё! Фича автоматически смонтируется в правильном порядке
+}
+```
+
+#### Шаг 7: Интеграция с UI (опционально)
+
+**`features/chat/chat.ui.js`:**
+
+```javascript
+// В компоненте чата добавляем кнопку записи
+import '../voice-messages/voice-messages.ui.js';
+
+render() {
+  return html`
+    <div class="composer">
+      <input type="text" />
+      
+      <!-- Кнопка записи голосового -->
+      <voice-recorder 
+        .voiceActor=${this.getVoiceActor()}
+        .contactId=${this.contactId}
+      ></voice-recorder>
+      
+      <button>Send</button>
+    </div>
+  `;
+}
+
+getVoiceActor() {
+  // Получаем актор из registry
+  return actorRegistry.get('voice-messages');
+}
+```
+
+### Итого
+
+**Что мы сделали:**
+
+1. ✅ Создали папку `features/voice-messages/`
+2. ✅ Написали контракт в `index.js`
+3. ✅ Реализовали machine, service, UI
+4. ✅ Зарегистрировали в `bootstrap.js`
+
+**Что НЕ пришлось делать:**
+
+- ❌ Править AppMachine
+- ❌ Править роутинг
+- ❌ Править другие фичи
+- ❌ Править core infrastructure
+
+**Фича полностью автономна** и может быть:
+- Включена/выключена одной строкой
+- Удалена удалением папки
+- Протестирована изолированно
+
+---
+
+## ✨ Best Practices
+
+### 1. Feature Design
+
+#### ✅ DO:
+
+```javascript
+// Фича инкапсулирует всю свою логику
+features/notifications/
+  index.js
+  notifications.machine.js
+  notifications.service.js
+  notifications.ui.js
+
+// Явные зависимости
+dependencies: ['chat', 'contacts']
+
+// События с понятными именами
+emittedEvents: ['NOTIFICATION_SHOWN', 'NOTIFICATION_DISMISSED']
+```
+
+#### ❌ DON'T:
+
+```javascript
+// НЕ импортируйте напрямую из других фич
+import { chatMachine } from '../chat/chat.machine.js'; // ❌
+
+// НЕ полагайтесь на internal state других фич
+const chatState = context.chat.state; // ❌
+
+// НЕ используйте глобальные переменные для связи
+window.currentUser = user; // ❌
+```
+
+### 2. Event Design
+
+#### ✅ DO:
+
+```javascript
+// Описательные имена
+'MESSAGE_SENT'
+'USER_LOGGED_IN'
+'SETTINGS_CHANGED'
+
+// Включайте необходимые данные
+{
+  type: 'MESSAGE_SENT',
+  messageId: '123',
+  to: 'user456',
+  timestamp: Date.now()
+}
+
+// Документируйте события
+emittedEvents: [
+  'MESSAGE_SENT',      // когда сообщение отправлено
+  'MESSAGE_FAILED'     // когда отправка провалилась
+]
+```
+
+#### ❌ DON'T:
+
+```javascript
+// Неясные имена
+'DONE' // ❌
+'UPDATE' // ❌
+'PROCESS' // ❌
+
+// Слишком много данных
+{
+  type: 'MESSAGE_SENT',
+  message: { /* весь объект сообщения */ }, // ❌
+  user: { /* весь профиль */ }, // ❌
+}
+
+// Недокументированные события
+emittedEvents: ['EVT1', 'EVT2'] // ❌
+```
+
+### 3. Dependencies
+
+#### ✅ DO:
+
+```javascript
+// Явные зависимости
+dependencies: ['persistence', 'crypto']
+
+// Минимальные зависимости
+dependencies: ['chat'] // только то, что действительно нужно
+
+// Через события, где возможно
+// Вместо зависимости от 'notifications'
+eventBus.dispatch({ type: 'SHOW_NOTIFICATION' })
+```
+
+#### ❌ DON'T:
+
+```javascript
+// Циклические зависимости
+// chat -> groups -> chat ❌
+
+// Слишком много зависимостей
+dependencies: ['a', 'b', 'c', 'd', 'e', 'f'] // ❌
+
+// Неявные зависимости
+// Используем, но не декларируем
+const cryptoService = getCryptoService(); // ❌
+```
+
+### 4. State Management
+
+#### ✅ DO:
+
+```javascript
+// Держите state внутри фичи
+context: {
+  messages: [],
+  selectedId: null
+}
+
+// Используйте machine для логики
+states: {
+  idle: {},
+  loading: {},
+  error: {}
+}
+
+// Persist критичные данные
+onUnmount: async (context) => {
+  await storage.save('feature-state', context.state);
+}
+```
+
+#### ❌ DON'T:
+
+```javascript
+// Не используйте глобальный state
+window.appState.messages = [...]; // ❌
+
+// Не храните state в DOM
+element.dataset.state = JSON.stringify(state); // ❌
+
+// Не забывайте про cleanup
+onUnmount: () => {
+  // забыли остановить timers ❌
+}
+```
+
+### 5. Testing
+
+#### ✅ DO:
+
+```javascript
+// Тестируйте изолированно
+describe('Voice Messages Feature', () => {
+  it('should start recording', async () => {
+    const actor = createActor(voiceMessagesMachine);
+    actor.start();
+    
+    actor.send({ type: 'START_RECORDING' });
+    
+    await waitFor(actor, (state) => state.matches('recording'));
+    expect(actor.getSnapshot().context.isRecording).toBe(true);
+  });
+});
+
+// Mock зависимости
+const mockCrypto = {
+  encrypt: vi.fn().mockResolvedValue('encrypted')
+};
+
+// Тестируйте события
+it('should emit VOICE_MESSAGE_SENT', async () => {
+  const events = [];
+  eventBus.on('VOICE_MESSAGE_SENT', (e) => events.push(e));
+  
+  // trigger action
+  
+  expect(events).toHaveLength(1);
+  expect(events[0].type).toBe('VOICE_MESSAGE_SENT');
+});
+```
+
+### 6. Performance
+
+#### ✅ DO:
+
+```javascript
+// Lazy load UI компонентов
+ui: {
+  components: {
+    Heavy: () => import('./heavy-component.js')
+  }
+}
+
+// Cleanup при unmount
+onUnmount: () => {
+  clearInterval(this.pollInterval);
+  this.worker.terminate();
+}
+
+// Используйте workers для тяжёлых операций
+const worker = new Worker('./feature.worker.js');
+```
+
+#### ❌ DON'T:
+
+```javascript
+// Не грузите всё сразу
+import HeavyComponent from './heavy-component.js'; // ❌
+
+// Не забывайте про cleanup
+onUnmount: () => {
+  // забыли остановить worker ❌
+}
+
+// Не блокируйте main thread
+for (let i = 0; i < 1000000; i++) { /* heavy */ } // ❌
+```
+
+### 7. Error Handling
+
+#### ✅ DO:
+
+```javascript
+// Обрабатывайте ошибки в machine
+states: {
+  processing: {
+    invoke: {
+      src: 'heavyOperation',
+      onError: {
+        target: 'error',
+        actions: 'logError'
+      }
+    }
+  },
+  error: {
+    on: {
+      RETRY: 'processing'
+    }
+  }
+}
+
+// Emit события об ошибках
+eventBus.dispatch({
+  type: 'FEATURE_ERROR',
+  featureId: 'voice-messages',
+  error: err.message
+}, 'HIGH');
+
+// Graceful degradation
+onUnmount: async () => {
+  try {
+    await cleanup();
+  } catch (err) {
+    console.error('Cleanup failed:', err);
+    // но не крашим приложение
+  }
+}
+```
+
+---
+
+## 📊 Метрики и мониторинг
+
+### Observability для фич
+
+```javascript
+// core/metrics.js
+export class FeatureMetrics {
+  track(featureId, metric, value) {
+    metrics.gauge(`feature.${featureId}.${metric}`, value);
+  }
+  
+  increment(featureId, event) {
+    metrics.increment(`feature.${featureId}.events.${event}`);
+  }
+  
+  timing(featureId, operation, duration) {
+    metrics.timing(`feature.${featureId}.${operation}`, duration);
+  }
+}
+
+// В фиче
+actions: {
+  trackEvent: ({ context }) => {
+    featureMetrics.increment('voice-messages', 'recording_started');
+  }
+}
+```
+
+### Полезные метрики
+
+- `feature.{id}.mounted` - когда фича смонтирована
+- `feature.{id}.events.{type}` - счётчик событий
+- `feature.{id}.errors` - счётчик ошибок
+- `feature.{id}.active_actors` - количество акторов
+- `feature.{id}.operation.{name}` - timing операций
+
+---
+
+## 🎓 Заключение
+
+### Что мы получили
+
+**Feature-Based Architecture** даёт нам:
+
+1. **Модульность** - каждая фича независима
+2. **Масштабируемость** - легко добавлять новые фичи
+3. **Поддерживаемость** - изменения локализованы
+4. **Тестируемость** - фичи тестируются изолированно
+5. **Гибкость** - легко включать/выключать фичи
+
+### Ключевые принципы (напоминание)
+
+> **Фича = минимальная автономная причина изменения**
+
+1. ✅ Фича содержит ВСЁ необходимое
+2. ✅ Фичи изолированы друг от друга
+3. ✅ Связь только через события/контракты
+4. ✅ Никто снаружи не знает, как фича устроена
+5. ✅ Добавление фичи = создание папки + регистрация
+
+### Сравнение с layered
+
+**До (layered):**
+```
+Добавить фичу = править в 7+ местах
+Удалить фичу = искать по всему коду
+Изменить фичу = риск сломать другие
+```
+
+**После (feature-based):**
+```
+Добавить фичу = 1 папка + 1 строка регистрации
+Удалить фичу = удалить папку + убрать регистрацию  
+Изменить фичу = править только внутри папки
+```
+
+### Production Checklist
+
+- ✅ Все фичи зарегистрированы
+- ✅ Зависимости корректно указаны
+- ✅ События документированы
+- ✅ Cleanup реализован
+- ✅ Error handling есть
+- ✅ UI компоненты lazy-loaded
+- ✅ Workers используются для тяжёлых операций
+- ✅ Метрики настроены
+- ✅ Tests написаны
+
+### Дальнейшее развитие
+
+Архитектура легко расширяется:
+
+- **Feature Flags** - включение/выключение через конфиг
+- **A/B Testing** - разные версии фич
+- **Plugin System** - динамическая загрузка фич
+- **Federation** - фичи из разных источников
+- **Hot Reload** - обновление фич без перезагрузки
+
+---
+
+## 📚 Приложение: Полная структура
+
+```
+chat-app/
+├── public/
+│   ├── index.html
+│   ├── sw.js
+│   ├── manifest.json
+│   └── workers/
+│       ├── crypto.worker.js
+│       └── media.worker.js
+│
+├── src/
+│   ├── features/                     🎯 ВСЕ ФИЧИ
+│   │   ├── auth/
+│   │   │   ├── index.js
+│   │   │   ├── auth.machine.js
+│   │   │   ├── auth.service.js
+│   │   │   └── auth.ui.js
+│   │   ├── identity/
+│   │   ├── contacts/
+│   │   ├── chat/
+│   │   │   ├── index.js
+│   │   │   ├── chat.machine.js
+│   │   │   ├── conversation.machine.js
+│   │   │   ├── chat.service.js
+│   │   │   └── chat.ui.js
+│   │   ├── groups/
+│   │   ├── signaling/
+│   │   │   ├── index.js
+│   │   │   ├── signaling.machine.js
+│   │   │   └── signaling.service.js
+│   │   ├── settings/
+│   │   │   ├── index.js
+│   │   │   ├── settings.machine.js
+│   │   │   └── settings.ui.js
+│   │   ├── crypto/
+│   │   │   ├── index.js
+│   │   │   └── crypto.service.js
+│   │   ├── persistence/
+│   │   │   ├── index.js
+│   │   │   └── persistence.service.js
+│   │   ├── notifications/
+│   │   ├── shell/
+│   │   │   ├── index.js
+│   │   │   ├── shell.machine.js
+│   │   │   └── shell.ui.js
+│   │   ├── streams/
+│   │   └── voice-messages/          ← новая фича
+│   │       ├── index.js
+│   │       ├── voice-messages.machine.js
+│   │       ├── voice-messages.service.js
+│   │       └── voice-messages.ui.js
+│   │
+│   ├── core/                         🔧 INFRASTRUCTURE
+│   │   ├── app-machine.js           ← root orchestrator
+│   │   ├── event-bus.js             ← priority events
+│   │   ├── feature-registry.js      ← регистрация фич
+│   │   ├── actor-registry.js        ← управление акторами
+│   │   ├── lifecycle.js             ← lifecycle hooks
+│   │   └── error-boundary.js        ← error handling
+│   │
+│   ├── runtime/                      📊 OBSERVABILITY
+│   │   ├── bootstrap.js             ← entry point
+│   │   ├── logger.js
+│   │   ├── metrics.js
+│   │   ├── performance-monitor.js
+│   │   ├── memory-manager.js
+│   │   └── rate-limiters.js
+│   │
+│   ├── shared/                       🛠️ SHARED (optional)
+│   │   ├── utils/
+│   │   └── constants.js
+│   │
+│   └── main.js                       ← вызывает bootstrap()
+│
+├── package.json
+├── vite.config.js
+└── README.md
+```
+
+---
+
+**Теперь у нас чистая, масштабируемая, поддерживаемая архитектура!** 🚀
+
+Каждая фича - это автономный вертикальный срез. Добавление нового функционала = создание папки + одна строка регистрации. Всё изолировано, всё тестируемо, всё понятно.
