@@ -1,15 +1,16 @@
 {
   "name": "chat-html",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Decentralized P2P Chat Application",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "lit": "^3.3.2",
     "xstate": "^5.25.0"

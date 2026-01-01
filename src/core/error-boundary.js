@@ -1,0 +1,2 @@
+// Error Boundary будет здесь
+

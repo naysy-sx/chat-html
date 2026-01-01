@@ -1,0 +1,2 @@
+// Feature contract будет здесь
+
