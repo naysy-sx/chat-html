@@ -3,7 +3,7 @@
 export class SettingsService {
 	// Константы
 	static DEFAULT_SIGNALING_SERVER =
-		'wss://your-default-server.example.com/signal';
+		'https://functions.yandexcloud.net/d4eembfgfpdabtj2no3m';
 
 	// Валидация username (для displayName)
 	validateUsername(username) {
@@ -77,14 +77,17 @@ export class SettingsService {
 
 		try {
 			const parsed = new URL(url);
-
-			if (parsed.protocol !== 'wss:' && parsed.protocol !== 'ws:') {
+			// Разрешаем https, wss и ws
+			if (
+				parsed.protocol !== 'wss:' &&
+				parsed.protocol !== 'ws:' &&
+				parsed.protocol !== 'https:'
+			) {
 				return {
 					valid: false,
-					error: 'URL должен начинаться с ws:// или wss://',
+					error: 'URL должен начинаться с https://, wss:// или ws://',
 				};
 			}
-
 			return { valid: true };
 		} catch (err) {
 			return { valid: false, error: 'Некорректный URL' };

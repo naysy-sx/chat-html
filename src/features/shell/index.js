@@ -73,7 +73,8 @@ export const shellFeature = {
 			shell.authActor = authActor;
 			shell.shellActor = shellActor;
 			shell.featureRegistry = mountContext.featureRegistry;
-			shell.eventBus = mountContext.eventBus; // ← Добавляем eventBus
+			shell.actorRegistry = mountContext.actorRegistry; // ← Передаём actorRegistry
+			shell.eventBus = mountContext.eventBus;
 
 			appContainer.appendChild(shell);
 		}

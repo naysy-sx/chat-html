@@ -1,0 +1,175 @@
+/* src/styles/global.css */
+/* =========================
+   GLOBAL RESET & ROOT VARIABLES
+   Этот файл подключается в index.html
+   ========================= */
+
+*,
+*::before,
+*::after {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html {
+	color-scheme: light dark;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-size-adjust: 100%;
+	scroll-behavior: smooth;
+}
+
+body {
+	font-family: var(--font-ui);
+	font-size: var(--text-body);
+	line-height: var(--line-normal);
+	color: var(--color-text-main);
+	background: var(--color-bg);
+	transition: background 0.3s, color 0.3s;
+}
+
+#app {
+	width: 100dvw;
+	height: 100dvh;
+	overflow-x: hidden;
+	overflow-y: auto;
+	position: absolute;
+	inset: 0;
+}
+
+/* =========================
+   CSS CUSTOM PROPERTIES (TOKENS)
+   Эти переменные пробрасываются в Shadow DOM
+   ========================= */
+
+:root {
+	/* ===== Fonts ===== */
+	--font-ui: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+		Helvetica, Arial, sans-serif;
+	--font-mono: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', 'Courier New',
+		monospace;
+
+	/* ===== Color Palette Base ===== */
+	--hue-primary: 270;
+	--hue-danger: 27;
+	--hue-success: 145;
+
+	/* ===== Lightness Scale ===== */
+	--l-bg: 98%;
+	--l-surface: 100%;
+	--l-raised: 96%;
+	--l-hover: 94%;
+	--l-border: 88%;
+	--l-muted: 45%;
+	--l-text: 25%;
+
+	/* ===== Semantic Colors ===== */
+	--color-bg: oklch(var(--l-bg) 0 0);
+	--color-surface: oklch(var(--l-surface) 0 0);
+	--color-surface-raised: oklch(var(--l-raised) 0 0);
+	--color-bg-hover: oklch(var(--l-hover) 0 0);
+	--color-text-main: oklch(var(--l-text) 0 0);
+	--color-text-muted: oklch(var(--l-muted) 0 0);
+	--color-border: oklch(var(--l-border) 0 0);
+
+	/* Алиас для обратной совместимости */
+	--border-color: var(--color-border);
+
+	/* ===== Primary ===== */
+	--color-primary: oklch(55% 0.25 var(--hue-primary));
+	--color-primary-dark: oklch(48% 0.25 var(--hue-primary));
+	--color-primary-soft: oklch(95% 0.05 var(--hue-primary));
+	--color-primary-muted: oklch(75% 0.08 var(--hue-primary));
+
+	/* ===== Danger ===== */
+	--color-danger: oklch(55% 0.18 var(--hue-danger));
+	--color-danger-soft: oklch(95% 0.05 var(--hue-danger));
+	--color-danger-border: oklch(85% 0.08 var(--hue-danger));
+	--color-danger-text: oklch(45% 0.15 var(--hue-danger));
+
+	/* ===== Success ===== */
+	--color-success: oklch(55% 0.15 var(--hue-success));
+	--color-success-soft: oklch(95% 0.05 var(--hue-success));
+
+	/* ===== Spacing ===== */
+	--space-3xs: clamp(0.25rem, 0.2rem + 0.2vw, 0.375rem);
+	--space-2xs: clamp(0.375rem, 0.3rem + 0.3vw, 0.5rem);
+	--space-xs: clamp(0.5rem, 0.45rem + 0.25vw, 0.625rem);
+	--space-s: clamp(0.625rem, 0.55rem + 0.35vw, 0.875rem);
+	--space-m: clamp(0.875rem, 0.8rem + 0.4vw, 1.125rem);
+	--space-l: clamp(1.25rem, 1.1rem + 0.7vw, 1.75rem);
+	--space-xl: clamp(1.75rem, 1.5rem + 1.2vw, 2.5rem);
+	--space-2xl: clamp(2.5rem, 2rem + 2vw, 4rem);
+
+	/* ===== Typography ===== */
+	--text-xs: clamp(0.75rem, 0.7rem + 0.15vw, 0.8125rem);
+	--text-sm: clamp(0.8125rem, 0.78rem + 0.15vw, 0.875rem);
+	--text-body: clamp(0.9375rem, 0.875rem + 0.25vw, 1.0625rem);
+	--text-lg: clamp(1.0625rem, 0.95rem + 0.5vw, 1.25rem);
+	--text-xl: clamp(1.25rem, 1.1rem + 0.7vw, 1.5rem);
+	--text-2xl: clamp(1.5rem, 1.25rem + 1vw, 2rem);
+	--text-3xl: clamp(1.875rem, 1.5rem + 1.5vw, 2.5rem);
+
+	--line-tight: 1.2;
+	--line-normal: 1.5;
+	--line-loose: 1.7;
+
+	/* ===== Border Radius ===== */
+	--radius-xs: 4px;
+	--radius-s: 6px;
+	--radius-m: 8px;
+	--radius-l: 12px;
+	--radius-xl: 16px;
+	--radius-full: 9999px;
+
+	/* ===== Shadows ===== */
+	--shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+	--shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+	--shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.05);
+	--shadow-lg: 0 4px 24px rgba(0, 0, 0, 0.1);
+	--shadow-card: 0 2px 8px rgba(0, 0, 0, 0.05);
+
+	/* ===== Transitions ===== */
+	--transition-fast: 0.15s ease;
+	--transition-normal: 0.2s ease;
+	--transition-slow: 0.3s ease;
+
+	/* ===== Z-Index ===== */
+	--z-dropdown: 100;
+	--z-sticky: 200;
+	--z-modal: 300;
+	--z-toast: 400;
+}
+
+/* =========================
+   Dark Mode
+   ========================= */
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--l-bg: 10%;
+		--l-surface: 15%;
+		--l-raised: 18%;
+		--l-hover: 22%;
+		--l-border: 25%;
+		--l-muted: 60%;
+		--l-text: 92%;
+
+		--color-primary: oklch(65% 0.25 var(--hue-primary));
+		--color-primary-dark: oklch(58% 0.25 var(--hue-primary));
+		--color-primary-soft: oklch(25% 0.08 var(--hue-primary));
+
+		--shadow-card: 0 2px 8px rgba(0, 0, 0, 0.3);
+		--shadow-lg: 0 4px 24px rgba(0, 0, 0, 0.4);
+	}
+}
+
+/* =========================
+   Focus States (глобально)
+   ========================= */
+
+:focus-visible {
+	outline: 2px solid var(--color-primary);
+	outline-offset: 2px;
+}

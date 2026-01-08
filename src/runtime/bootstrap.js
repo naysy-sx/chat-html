@@ -10,19 +10,19 @@ import { createActor } from 'xstate';
 import { persistenceFeature } from '../features/persistence/index.js';
 import { identityFeature } from '../features/identity/index.js';
 import { authFeature } from '../features/auth/index.js';
-import { settingsFeature } from '../features/settings/index.js'; // ← НОВОЕ
+import { settingsFeature } from '../features/settings/index.js';
+import { signalingFeature } from '../features/signaling/index.js';
 import { shellFeature } from '../features/shell/index.js';
 
 export async function bootstrap() {
 	console.log('🚀 Загрузка приложения...');
 
 	// 1. Регистрируем фичи (порядок не критичен - Feature Registry сам сортирует по зависимостям)
-	featureRegistry.register(persistenceFeature); // Базовая фича, без зависимостей
-	// identityFeature временно оставляем для совместимости, но больше не используется
-	// featureRegistry.register(identityFeature);
-	featureRegistry.register(authFeature); // Зависит ТОЛЬКО от persistence, создаёт свой crypto service
-	featureRegistry.register(settingsFeature); // Зависит от persistence, auth
-	featureRegistry.register(shellFeature); // Зависит от auth
+	featureRegistry.register(persistenceFeature);
+	featureRegistry.register(authFeature);
+	featureRegistry.register(settingsFeature);
+	featureRegistry.register(signalingFeature);
+	featureRegistry.register(shellFeature);
 
 	// 2. Создаём контекст для фич
 	const context = {

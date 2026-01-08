@@ -218,9 +218,27 @@ export function createSettingsMachine({
 				};
 			}),
 
-			setActiveServer: assign(({ event }) => ({
-				activeServerId: event.serverId,
-			})),
+			setActiveServer: assign(({ event, context }) => {
+				const serverId = event.serverId;
+				const newServer = context.signalingServers.find(
+					(s) => s.id === serverId
+				);
+
+				// Уведомляем о смене сервера через EventBus
+				if (newServer && context.eventBus) {
+					setTimeout(() => {
+						context.eventBus.dispatch({
+							type: 'SIGNALING_SERVER_CHANGED',
+							serverUrl: newServer.url,
+							serverId: serverId,
+						});
+					}, 0);
+				}
+
+				return {
+					activeServerId: serverId,
+				};
+			}),
 
 			assignError: assign({
 				error: ({ event }) => event.error?.message || 'Неизвестная ошибка',

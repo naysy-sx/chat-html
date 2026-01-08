@@ -60,10 +60,12 @@ export const settingsFeature = {
 			currentSettingsActor = actor;
 
 			// Регистрируем (перезаписываем) в реестре
+			// ВАЖНО: ActorRegistry теперь отслеживает жизненный цикл актора
 			if (mountContext.actorRegistry) {
 				mountContext.actorRegistry.register('settings', actor, {
 					type: 'feature',
 					feature: 'settings',
+					username: username,
 				});
 			}
 
@@ -72,6 +74,7 @@ export const settingsFeature = {
 				mountContext.eventBus.dispatch({
 					type: 'SETTINGS_READY',
 					actor: actor,
+					username: username,
 				});
 			}
 
@@ -84,11 +87,6 @@ export const settingsFeature = {
 				console.log('🛑 Stopping Settings Actor (Logout/Switch)...');
 				currentSettingsActor.stop();
 				currentSettingsActor = null;
-
-				// Можно также оповестить EventBus о сбросе настроек, если нужно
-				if (mountContext.eventBus) {
-					// Опционально: событие что настройки выгружены
-				}
 			}
 		};
 
@@ -117,27 +115,43 @@ export const settingsFeature = {
 			}
 		});
 
-		// Возвращаем объект для featureRegistry.
-		// Важно: мы возвращаем методы управления, но сам featureRegistry
-		// не будет автоматически обновлять поле 'actor', так как мы его меняем динамически.
-		// Поэтому UI должен полагаться на EventBus (как мы и сделали).
+		// Возвращаем объект для featureRegistry
+		// ВАЖНО: Актор управляется динамически, поэтому мы возвращаем функцию + текущее значение
 		return {
-			// Метод для ручного получения (если нужно)
+			// Текущий актор (может быть null если гость)
+			// ActorRegistry будет использовать это значение при регистрации
+			actor: currentSettingsActor,
+
+			// Дополнительно: функция для получения текущего актора
+			// (используется в getMountResult().getActor?.())
 			getActor: () => currentSettingsActor,
-			subscription, // возвращаем подписку, чтобы featureRegistry мог ее сохранить (опционально)
+
+			// Подписка на auth для отписки при umount
+			subscription,
+
+			// Функция для остановки актора вручную
+			stopActor,
 		};
 	},
 
 	async onUnmount(context) {
+		console.log('⚙️ Settings feature unmounting...');
+
 		// Отписываемся от Auth
 		if (context.subscription) {
+			console.log('  - Unsubscribing from auth');
 			context.subscription.unsubscribe();
 		}
 
 		// Останавливаем актор
-		const actor = context.getActor ? context.getActor() : null;
+		const actor = context.getActor?.() || context.actor;
 		if (actor) {
-			actor.stop();
+			console.log('  - Stopping settings actor');
+			try {
+				actor.stop();
+			} catch (e) {
+				console.error('[Settings] Error stopping actor:', e);
+			}
 		}
 
 		console.log('⚙️ Settings feature unmounted');

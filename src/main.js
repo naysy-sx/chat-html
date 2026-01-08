@@ -1,6 +1,6 @@
 // src/main.js
 
-import './styles/theme.css';
+import './styles/global.css';
 import { bootstrap } from './runtime/bootstrap.js';
 
 // UI компоненты загружаются динамически через features
