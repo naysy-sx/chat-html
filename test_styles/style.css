@@ -1,0 +1,484 @@
+/* =========================
+   GLOBAL RESET & BOX-SIZING
+   ========================= */
+
+*,
+*::before,
+*::after {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html {
+	color-scheme: light dark; /* Важно: браузер сам подхватывает и переключает */
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-size-adjust: 100%;
+	hanging-punctuation: first allow-end last;
+	scroll-behavior: smooth;
+}
+
+body {
+	min-height: 100vh;
+	padding: var(--space-l);
+	font-family: var(--font-ui);
+	font-size: var(--text-body);
+	line-height: var(--line-normal);
+	color: var(--color-text-main);
+	background: var(--color-bg);
+	background-image: linear-gradient(
+		to bottom,
+		oklch(var(--l-0) 0 0),
+		oklch(calc(var(--l-0) - 1%) 0 0)
+	);
+	transition: background 0.3s, color 0.3s;
+}
+
+/* =========================
+   ROOT VARIABLES: Шрифты (общие)
+   ========================= */
+
+:root {
+	--font-ui: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+		Helvetica, Arial, sans-serif;
+	--font-accent: 'Georgia', 'Times New Roman', serif;
+
+	/* =========================
+	   Color palette base values
+	   ========================= */
+
+	--h-accent: 250; /* спокойный деловой синий */
+	--c-accent: 0.09;
+
+	--l-0: 99%;
+	--l-1: 96%;
+	--l-2: 92%;
+	--l-3: 86%;
+	--l-4: 78%;
+	--l-5: 68%;
+	--l-6: 56%;
+	--l-7: 42%;
+	--l-8: 28%;
+	--l-9: 15%;
+	--l-10: 8%;
+
+	/* =========================
+	   Light default colors
+	   ========================= */
+
+	--color-bg: oklch(var(--l-0) 0 0);
+	--color-surface: oklch(var(--l-1) 0 0);
+	--color-line: oklch(var(--l-3) 0 0);
+
+	--color-text-main: oklch(var(--l-8) 0 0);
+	--color-text-muted: oklch(var(--l-6) 0 0);
+
+	--color-accent: oklch(var(--l-5) var(--c-accent) var(--h-accent));
+	--color-accent-soft: oklch(var(--l-3) var(--c-accent) var(--h-accent));
+	--color-accent-strong: oklch(var(--l-7) var(--c-accent) var(--h-accent));
+
+	--surface-default: var(--color-surface);
+	--surface-raised: oklch(var(--l-2) 0 0);
+	--border-subtle: var(--color-line);
+
+	/* =========================
+	   Fluid typography & spacing (commonly used sizes)
+	   ========================= */
+
+	--step--2: clamp(0.6331rem, 0.7766rem + -0.1594vw, 0.7407rem);
+	--step--1: clamp(0.8333rem, 0.8298rem + 0.0157vw, 0.844rem);
+	--step-0: clamp(0.9375rem, 0.875rem + 0.2778vw, 1.125rem);
+	--step-1: clamp(1.0547rem, 0.9064rem + 0.6592vw, 1.4996rem);
+	--step-2: clamp(1.1865rem, 0.9157rem + 1.2037vw, 1.999rem);
+	--step-3: clamp(1.3348rem, 0.8916rem + 1.9701vw, 2.6647rem);
+	--step-4: clamp(1.5017rem, 0.8183rem + 3.0375vw, 3.552rem);
+	--step-5: clamp(1.6894rem, 0.6743rem + 4.5117vw, 4.7348rem);
+
+	--space-xs: var(--step--2);
+	--space-s: var(--step--1);
+	--space-m: var(--step-0);
+	--space-l: var(--step-1);
+	--space-xl: min(var(--step-2), 4rem);
+
+	--line-tight: 1.2;
+	--line-normal: 1.45;
+	--line-loose: 1.7;
+
+	--radius-s: calc(var(--step-0) * 0.4);
+	--radius-m: calc(var(--step-0) * 0.6);
+	--radius-l: calc(var(--step-0) * 0.9);
+
+	--text-body: var(--step-0);
+	--text-small: var(--step--1);
+	--text-h3: var(--step-1);
+	--text-h2: var(--step-2);
+}
+
+/* =========================
+   Dark mode overrides
+   ========================= */
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		/* Инвертируем светлоту: фон тёмный, текст светлый */
+		--color-bg: oklch(var(--l-10) 0 0);
+		--color-surface: oklch(var(--l-9) 0 0);
+		--color-line: oklch(var(--l-7) 0 0);
+
+		--color-text-main: oklch(var(--l-2) 0 0);
+		--color-text-muted: oklch(var(--l-4) 0 0);
+
+		/* Акцент остаётся тем же по оттенку, но чуть ярче для контраста */
+		--color-accent: oklch(
+			62% var(--c-accent) var(--h-accent)
+		); /* ~ средняя светлота */
+		--color-accent-soft: oklch(75% var(--c-accent) var(--h-accent));
+		--color-accent-strong: oklch(55% var(--c-accent) var(--h-accent));
+	}
+}
+
+/* =========================
+   Typography
+   ========================= */
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	text-wrap: balance;
+	margin: 0 0 var(--space-s);
+	font-weight: 600;
+}
+
+h1 {
+	font-size: var(--step-3);
+	font-weight: 700; /* жирнее! */
+	letter-spacing: -0.02em;
+	line-height: var(--line-tight);
+}
+
+h2 {
+	font-size: var(--step-2);
+	font-weight: 700;
+	letter-spacing: -0.015em;
+	line-height: var(--line-tight);
+}
+
+h3 {
+	font-size: var(--step-1);
+	font-weight: 600;
+	line-height: var(--line-tight);
+}
+
+p {
+	text-wrap: pretty;
+	margin-bottom: var(--space-m);
+}
+
+a {
+	color: var(--color-accent);
+	text-decoration: underline;
+	transition: color 0.2s ease;
+}
+
+a:hover {
+	color: var(--color-accent-strong);
+	text-decoration: none;
+}
+
+strong,
+b {
+	font-weight: 600;
+}
+
+blockquote {
+	margin: var(--space-m) 0;
+	padding-left: var(--space-m);
+	border-left: 3px solid var(--color-accent);
+	font-style: italic;
+	color: var(--color-text-muted);
+}
+
+hr {
+	border: none;
+	border-bottom: 1px solid var(--color-line);
+	margin: var(--space-l) 0; /* больше воздуха */
+}
+
+/* =========================
+   Lists
+   ========================= */
+
+ul,
+ol {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-xs);
+	padding-left: var(--space-l);
+	margin-bottom: var(--space-m);
+}
+
+ul ul,
+ul ol,
+ol ul,
+ol ol {
+	margin-top: var(--space-xs);
+	margin-bottom: 0;
+}
+
+li::marker {
+	color: var(--color-accent);
+}
+
+/* =========================
+   Media
+   ========================= */
+
+img,
+picture,
+video,
+svg {
+	display: block;
+	max-width: 100%;
+	height: auto;
+}
+
+img {
+	vertical-align: middle;
+	font-style: italic;
+	background-repeat: no-repeat;
+	background-size: cover;
+	shape-margin: var(--space-s);
+}
+
+/* =========================
+   Forms & Focus
+   ========================= */
+
+input,
+textarea,
+select {
+	font-family: inherit;
+	font-size: var(--text-body);
+	padding: var(--space-xs) var(--space-s);
+	border-radius: var(--radius-s);
+	border: 1px solid var(--color-accent-soft);
+	background: var(--color-bg);
+	color: var(--color-text-main);
+	transition: all 0.2s ease;
+	width: 100%;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+	outline: none;
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+textarea {
+	resize: vertical;
+}
+
+textarea:not([rows]) {
+	min-height: 10em;
+}
+
+label {
+	display: inline-flex;
+	font-weight: 600;
+	font-size: var(--text-small);
+	margin-bottom: var(--space-xs);
+	color: var(--color-text-main);
+	gap: var(--space-xs);
+	align-items: center;
+}
+
+fieldset {
+	border: 1px solid var(--color-line);
+	border-radius: var(--radius-m);
+	padding: var(--space-m);
+	margin-bottom: var(--space-m);
+	min-inline-size: 0;
+}
+
+legend {
+	font-weight: 600;
+	padding: 0 var(--space-xs);
+}
+
+button {
+	font-family: inherit;
+	font-size: var(--text-body);
+	font-weight: 600; /* жирнее */
+	padding: var(--space-xs) var(--space-s); /* больше padding */
+	border-radius: var(--radius-s);
+	border: none;
+	background: var(--color-accent);
+	color: white;
+	cursor: pointer;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+button:hover {
+	background: var(--color-accent-strong);
+	transform: translateY(-1px);
+	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+button:active {
+	transform: translateY(0);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+	transform: none;
+}
+
+/* Secondary button */
+button.secondary {
+	background: var(--color-surface);
+	color: var(--color-text-main);
+	border: 1px solid var(--color-line);
+}
+
+button.secondary:hover {
+	background: var(--surface-raised);
+	border-color: var(--color-accent);
+}
+
+:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
+}
+
+/* =========================
+   Tables & Misc
+   ========================= */
+
+table {
+	border-collapse: collapse;
+	width: 100%;
+	margin: var(--space-m) 0;
+	border: 1px solid var(--color-line);
+	border-radius: var(--radius-m);
+	overflow: hidden; /* для rounded corners */
+}
+
+thead {
+	background: var(--color-surface);
+}
+
+th {
+	font-weight: 600;
+	text-align: left;
+	padding: var(--space-xs) var(--space-s);
+	border-bottom: 2px solid var(--color-line);
+	color: var(--color-text-main);
+}
+
+td {
+	padding: var(--space-xs) var(--space-s);
+	border-bottom: 1px solid var(--color-line);
+	color: var(--color-text-main);
+}
+
+tbody tr:last-child td {
+	border-bottom: none;
+}
+
+tbody tr:hover {
+	background: var(--surface-raised);
+}
+
+caption {
+	text-align: start;
+	font-weight: 600;
+	margin-bottom: var(--space-s);
+	color: var(--color-text-main);
+}
+
+:target {
+	scroll-margin-block: 5ex;
+}
+
+sub,
+sup {
+	font-size: 0.8em;
+	line-height: 0;
+	position: relative;
+	vertical-align: baseline;
+}
+
+sub {
+	bottom: -0.25em;
+}
+sup {
+	top: -0.5em;
+}
+
+pre,
+code,
+kbd,
+samp {
+	font-family: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', monospace;
+}
+
+pre {
+	background: var(--color-surface);
+	padding: var(--space-xs) var(--space-s);
+	border-radius: var(--radius-s);
+	overflow-x: auto;
+	margin: var(--space-m) 0;
+	border: 1px solid var(--color-line);
+}
+
+code {
+	font-family: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', monospace;
+	font-size: 0.9em;
+	background: var(--color-surface);
+	padding: 0.2em 0.4em;
+	border-radius: var(--radius-s);
+}
+
+pre code {
+	background: none;
+	padding: 0;
+}
+
+details {
+	background: var(--color-surface);
+	padding: var(--space-m);
+	border-radius: var(--radius-m);
+	border: 1px solid var(--color-line);
+	margin: var(--space-m) 0;
+}
+
+summary {
+	cursor: pointer;
+	font-weight: 600;
+	user-select: none;
+}
+
+summary:hover {
+	color: var(--color-accent);
+}
+
+details[open] summary {
+	margin-bottom: var(--space-s);
+	padding-bottom: var(--space-s);
+	border-bottom: 1px solid var(--color-line);
+}
+
+:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
+	border-radius: var(--radius-s);
+}

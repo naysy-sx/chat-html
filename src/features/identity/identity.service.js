@@ -1,40 +1,105 @@
-// Identity Service
-import { persistenceService } from "../persistence/persistence.service.js";
-import { cryptoService } from "../crypto/crypto.service.js";
+// src/features/identity/identity.service.js
 
-class IdentityService {
-	async createProfile(username, password) {
-		// Генерируем ключевую пару
-		const keyPair = await cryptoService.generateKeyPair();
+export class IdentityCryptoService {
+	constructor(workerUrl = '/workers/crypto.worker.js') {
+		this.workerUrl = workerUrl;
+		this.worker = null;
+		this.pending = new Map();
+		this.requestId = 0;
+	}
 
-		// Создаём профиль
-		const profile = {
-			userId: `user_${Date.now()}`,
-			username,
-			passwordHash: btoa(password), // ВНИМАНИЕ: это НЕ безопасно, только для демо!
-			publicKey: keyPair.publicKey,
-			privateKey: keyPair.privateKey,
-			createdAt: Date.now(),
+	async init() {
+		if (this.worker) return;
+
+		this.worker = new Worker(new URL(this.workerUrl, window.location.origin));
+
+		this.worker.onmessage = (e) => {
+			const { requestId, result, error } = e.data;
+			const entry = this.pending.get(requestId);
+			if (!entry) return;
+
+			error ? entry.reject(new Error(error)) : entry.resolve(result);
+			this.pending.delete(requestId);
 		};
 
-		// Сохраняем в IndexedDB
-		await persistenceService.set("profiles", profile);
-
-		return profile;
+		this.worker.onerror = (err) => {
+			console.error('[CryptoService] Worker error:', err);
+			for (const { reject } of this.pending.values()) {
+				reject(new Error('CryptoWorker crashed'));
+			}
+			this.pending.clear();
+		};
 	}
 
-	async getProfile(userId) {
-		return await persistenceService.get("profiles", userId);
+	async request(method, params = {}) {
+		await this.init();
+
+		const id = this.requestId++;
+
+		return new Promise((resolve, reject) => {
+			this.pending.set(id, { resolve, reject });
+
+			this.worker.postMessage({
+				requestId: id,
+				method,
+				params,
+			});
+
+			setTimeout(() => {
+				if (this.pending.has(id)) {
+					this.pending.delete(id);
+					reject(new Error(`Crypto timeout: ${method}`));
+				}
+			}, 30_000);
+		});
 	}
 
-	async getProfileByUsername(username) {
-		const profiles = await persistenceService.getAll("profiles");
-		return profiles.find((p) => p.username === username);
+	/* ===== Crypto API ===== */
+
+	generateIdentity() {
+		return this.request('generateIdentity');
 	}
 
-	async saveProfile(profile) {
-		await persistenceService.set("profiles", profile);
+	encrypt(plaintext, recipientExchangePublicKey) {
+		return this.request('encrypt', {
+			plaintext,
+			recipientExchangePublicKey,
+		});
+	}
+
+	/**
+	 * Расшифровать сообщение
+	 * @param {Object} encryptedData - объект от encrypt()
+	 * @param {Object} myExchangePrivateKey - приватный ключ (JWK)
+	 */
+	decrypt(encryptedData, myExchangePrivateKey) {
+		// ⭐ Поддерживаем ОБА имени: ephemeralPublicKey и senderEphemeralPublicKey
+		const ephemeralKey =
+			encryptedData.senderEphemeralPublicKey ||
+			encryptedData.ephemeralPublicKey;
+
+		if (!ephemeralKey) {
+			return Promise.reject(
+				new Error('Missing ephemeral public key in encrypted data')
+			);
+		}
+
+		if (!myExchangePrivateKey) {
+			return Promise.reject(new Error('Missing private key for decryption'));
+		}
+
+		return this.request('decrypt', {
+			ciphertext: encryptedData.ciphertext,
+			iv: encryptedData.iv,
+			senderEphemeralPublicKey: ephemeralKey,
+			myExchangePrivateKey,
+		});
+	}
+
+	async destroy() {
+		if (this.worker) {
+			this.worker.terminate();
+			this.worker = null;
+		}
 	}
 }
-
-export const identityService = new IdentityService();

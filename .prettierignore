@@ -1,0 +1,11 @@
+# Build outputs
+dist/
+build/
+*.min.js
+
+# Dependencies
+node_modules/
+
+# Config files
+package-lock.json
+pnpm-lock.yaml

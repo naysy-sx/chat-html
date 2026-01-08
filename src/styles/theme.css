@@ -1,0 +1,571 @@
+/* =========================
+   GLOBAL RESET & BOX-SIZING
+   ========================= */
+
+*,
+*::before,
+*::after {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html {
+	color-scheme: light dark;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-size-adjust: 100%;
+	hanging-punctuation: first allow-end last;
+	scroll-behavior: smooth;
+}
+
+body {
+	font-family: var(--font-ui);
+	font-size: var(--text-body);
+	line-height: var(--line-normal);
+	color: var(--color-text-main);
+	background: var(--color-bg);
+	transition: background 0.3s, color 0.3s;
+}
+
+#app {
+	width: 100dvw;
+	height: 100dvh;
+	overflow-x: hidden;
+	overflow-y: auto;
+	position: absolute;
+	inset: 0;
+}
+
+/* =========================
+   ROOT VARIABLES
+   ========================= */
+
+:root {
+	/* ===== Fonts ===== */
+	--font-ui: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+		Helvetica, Arial, sans-serif;
+	--font-mono: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', 'Courier New',
+		monospace;
+	--font-accent: 'Georgia', 'Times New Roman', serif;
+
+	/* ===== Color Palette Base ===== */
+	--h-primary: 270; /* Индиго — как в компонентах */
+	--c-primary: 0.25; /* Насыщенный! */
+
+	--h-danger: 27; /* Красно-оранжевый */
+	--c-danger: 0.18;
+
+	--h-success: 145; /* Зелёный */
+	--c-success: 0.15;
+
+	/* ===== Lightness Scale (упрощённая) ===== */
+	--l-bg: 98%; /* Фон страницы */
+	--l-surface: 100%; /* Карточки */
+	--l-raised: 96%; /* Приподнятые элементы */
+	--l-hover: 94%; /* Hover состояния */
+	--l-line: 88%; /* Линии, границы */
+	--l-muted: 45%; /* Приглушённый текст */
+	--l-text: 25%; /* Основной текст */
+
+	/* ===== Semantic Colors ===== */
+	--color-bg: oklch(var(--l-bg) 0 0);
+	--color-surface: oklch(var(--l-surface) 0 0);
+	--color-surface-raised: oklch(var(--l-raised) 0 0);
+	--color-bg-hover: oklch(var(--l-hover) 0 0);
+
+	--color-text-main: oklch(var(--l-text) 0 0);
+	--color-text-muted: oklch(var(--l-muted) 0 0);
+
+	--color-line: oklch(var(--l-line) 0 0);
+	--border-color: var(--color-line);
+	--border-subtle: var(--color-line);
+
+	/* ===== Primary (Индиго) ===== */
+	--color-primary: oklch(55% var(--c-primary) var(--h-primary));
+	--color-primary-dark: oklch(48% var(--c-primary) var(--h-primary));
+	--color-primary-soft: oklch(95% 0.05 var(--h-primary));
+	--color-primary-muted: oklch(75% 0.08 var(--h-primary));
+
+	/* Алиасы для обратной совместимости */
+	--color-accent: var(--color-primary);
+	--color-accent-soft: var(--color-primary-soft);
+	--color-accent-strong: var(--color-primary-dark);
+
+	/* ===== Danger (Красный) ===== */
+	--color-danger: oklch(55% var(--c-danger) var(--h-danger));
+	--color-danger-soft: oklch(95% 0.05 var(--h-danger));
+	--color-danger-border: oklch(85% 0.08 var(--h-danger));
+	--color-danger-text: oklch(45% 0.15 var(--h-danger));
+
+	/* ===== Success (Зелёный) ===== */
+	--color-success: oklch(55% var(--c-success) var(--h-success));
+	--color-success-soft: oklch(95% 0.05 var(--h-success));
+
+	/* ===== Spacing (Fluid) ===== */
+	--space-3xs: clamp(0.25rem, 0.2rem + 0.2vw, 0.375rem);
+	--space-2xs: clamp(0.375rem, 0.3rem + 0.3vw, 0.5rem);
+	--space-xs: clamp(0.5rem, 0.45rem + 0.25vw, 0.625rem);
+	--space-s: clamp(0.625rem, 0.55rem + 0.35vw, 0.875rem);
+	--space-m: clamp(0.875rem, 0.8rem + 0.4vw, 1.125rem);
+	--space-l: clamp(1.25rem, 1.1rem + 0.7vw, 1.75rem);
+	--space-xl: clamp(1.75rem, 1.5rem + 1.2vw, 2.5rem);
+	--space-2xl: clamp(2.5rem, 2rem + 2vw, 4rem);
+
+	/* ===== Typography ===== */
+	--text-xs: clamp(0.75rem, 0.7rem + 0.15vw, 0.8125rem);
+	--text-sm: clamp(0.8125rem, 0.78rem + 0.15vw, 0.875rem);
+	--text-body: clamp(0.9375rem, 0.875rem + 0.25vw, 1.0625rem);
+	--text-lg: clamp(1.0625rem, 0.95rem + 0.5vw, 1.25rem);
+	--text-xl: clamp(1.25rem, 1.1rem + 0.7vw, 1.5rem);
+	--text-2xl: clamp(1.5rem, 1.25rem + 1vw, 2rem);
+	--text-3xl: clamp(1.875rem, 1.5rem + 1.5vw, 2.5rem);
+
+	--line-tight: 1.2;
+	--line-normal: 1.5;
+	--line-loose: 1.7;
+
+	/* ===== Border Radius ===== */
+	--radius-xs: 4px;
+	--radius-s: 6px;
+	--radius-m: 8px;
+	--radius-l: 12px;
+	--radius-xl: 16px;
+	--radius-full: 9999px;
+
+	/* ===== Shadows ===== */
+	--shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+	--shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+	--shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.05);
+	--shadow-lg: 0 4px 24px rgba(0, 0, 0, 0.1);
+	--shadow-card: 0 2px 8px rgba(0, 0, 0, 0.05);
+	--shadow-elevated: 0 8px 30px rgba(0, 0, 0, 0.12);
+
+	/* ===== Transitions ===== */
+	--transition-fast: 0.15s ease;
+	--transition-normal: 0.2s ease;
+	--transition-slow: 0.3s ease;
+
+	/* ===== Z-Index Scale ===== */
+	--z-dropdown: 100;
+	--z-sticky: 200;
+	--z-modal: 300;
+	--z-toast: 400;
+}
+
+/* =========================
+   Dark Mode
+   ========================= */
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--l-bg: 10%;
+		--l-surface: 15%;
+		--l-raised: 18%;
+		--l-hover: 22%;
+		--l-line: 25%;
+		--l-muted: 60%;
+		--l-text: 92%;
+
+		/* Primary чуть ярче в тёмной теме */
+		--color-primary: oklch(65% var(--c-primary) var(--h-primary));
+		--color-primary-dark: oklch(58% var(--c-primary) var(--h-primary));
+		--color-primary-soft: oklch(25% 0.08 var(--h-primary));
+
+		/* Shadows более заметные */
+		--shadow-card: 0 2px 8px rgba(0, 0, 0, 0.3);
+		--shadow-lg: 0 4px 24px rgba(0, 0, 0, 0.4);
+	}
+}
+
+/* =========================
+   Typography
+   ========================= */
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	text-wrap: balance;
+	margin: 0 0 var(--space-s);
+	font-weight: 600;
+	line-height: var(--line-tight);
+}
+
+h1 {
+	font-size: var(--text-3xl);
+	font-weight: 700;
+	letter-spacing: -0.02em;
+}
+
+h2 {
+	font-size: var(--text-2xl);
+	font-weight: 700;
+	letter-spacing: -0.015em;
+}
+
+h3 {
+	font-size: var(--text-xl);
+}
+
+p {
+	text-wrap: pretty;
+	margin-bottom: var(--space-m);
+}
+
+a {
+	color: var(--color-primary);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	transition: color var(--transition-fast);
+}
+
+a:hover {
+	color: var(--color-primary-dark);
+}
+
+strong,
+b {
+	font-weight: 600;
+}
+
+small {
+	font-size: var(--text-sm);
+	color: var(--color-text-muted);
+}
+
+blockquote {
+	margin: var(--space-m) 0;
+	padding-left: var(--space-m);
+	border-left: 3px solid var(--color-primary);
+	font-style: italic;
+	color: var(--color-text-muted);
+}
+
+hr {
+	border: none;
+	border-bottom: 1px solid var(--color-line);
+	margin: var(--space-l) 0;
+}
+
+/* =========================
+   Lists
+   ========================= */
+
+ul,
+ol {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-xs);
+	padding-left: var(--space-l);
+	margin-bottom: var(--space-m);
+}
+
+li::marker {
+	color: var(--color-primary);
+}
+
+/* =========================
+   Media
+   ========================= */
+
+img,
+picture,
+video,
+svg {
+	display: block;
+	max-width: 100%;
+	height: auto;
+}
+
+/* =========================
+   Forms
+   ========================= */
+
+input,
+textarea,
+select {
+	font-family: inherit;
+	font-size: var(--text-body);
+	padding: var(--space-s) var(--space-m);
+	border-radius: var(--radius-m);
+	border: 1px solid var(--color-line);
+	background: var(--color-bg);
+	color: var(--color-text-main);
+	transition: border-color var(--transition-fast),
+		box-shadow var(--transition-fast);
+	width: 100%;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+	outline: none;
+	border-color: var(--color-primary);
+	box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+
+input::placeholder,
+textarea::placeholder {
+	color: var(--color-text-muted);
+	opacity: 0.7;
+}
+
+textarea {
+	resize: vertical;
+	min-height: 5em;
+}
+
+label {
+	display: block;
+	font-weight: 500;
+	font-size: var(--text-sm);
+	margin-bottom: var(--space-xs);
+	color: var(--color-text-main);
+}
+
+fieldset {
+	border: 1px solid var(--color-line);
+	border-radius: var(--radius-l);
+	padding: var(--space-l);
+	margin-bottom: var(--space-m);
+}
+
+legend {
+	font-weight: 600;
+	padding: 0 var(--space-xs);
+}
+
+/* =========================
+   Buttons
+   ========================= */
+
+button,
+.button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-xs);
+	font-family: inherit;
+	font-size: var(--text-body);
+	font-weight: 500;
+	padding: var(--space-s) var(--space-m);
+	border-radius: var(--radius-m);
+	border: none;
+	background: var(--color-primary);
+	color: white;
+	cursor: pointer;
+	transition: background var(--transition-fast),
+		transform var(--transition-fast), box-shadow var(--transition-fast);
+	box-shadow: var(--shadow-sm);
+}
+
+button:hover,
+.button:hover {
+	background: var(--color-primary-dark);
+	transform: translateY(-1px);
+	box-shadow: var(--shadow-md);
+}
+
+button:active,
+.button:active {
+	transform: translateY(0);
+	box-shadow: var(--shadow-xs);
+}
+
+button:disabled,
+.button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+	transform: none;
+}
+
+/* Secondary Button */
+button.secondary,
+.button-secondary {
+	background: var(--color-surface-raised);
+	color: var(--color-text-main);
+	border: 1px solid var(--color-line);
+}
+
+button.secondary:hover,
+.button-secondary:hover {
+	background: var(--color-bg-hover);
+	border-color: var(--color-primary-muted);
+}
+
+/* Danger Button */
+button.danger,
+.button-danger {
+	background: var(--color-danger-soft);
+	color: var(--color-danger-text);
+}
+
+button.danger:hover,
+.button-danger:hover {
+	background: var(--color-danger-border);
+}
+
+/* Ghost/Icon Button */
+.icon-button {
+	padding: var(--space-xs);
+	background: transparent;
+	box-shadow: none;
+	color: var(--color-text-muted);
+}
+
+.icon-button:hover {
+	background: var(--color-bg-hover);
+	transform: none;
+	box-shadow: none;
+}
+
+/* =========================
+   Cards & Surfaces
+   ========================= */
+
+.card,
+.section {
+	background: var(--color-surface);
+	border-radius: var(--radius-l);
+	padding: var(--space-l);
+	box-shadow: var(--shadow-card);
+}
+
+.card-elevated {
+	box-shadow: var(--shadow-lg);
+}
+
+/* =========================
+   Tables
+   ========================= */
+
+table {
+	border-collapse: collapse;
+	width: 100%;
+	margin: var(--space-m) 0;
+	border: 1px solid var(--color-line);
+	border-radius: var(--radius-m);
+	overflow: hidden;
+}
+
+thead {
+	background: var(--color-surface-raised);
+}
+
+th {
+	font-weight: 600;
+	text-align: left;
+	padding: var(--space-s) var(--space-m);
+	border-bottom: 2px solid var(--color-line);
+}
+
+td {
+	padding: var(--space-s) var(--space-m);
+	border-bottom: 1px solid var(--color-line);
+}
+
+tbody tr:last-child td {
+	border-bottom: none;
+}
+
+tbody tr:hover {
+	background: var(--color-bg-hover);
+}
+
+/* =========================
+   Code
+   ========================= */
+
+pre,
+code,
+kbd,
+samp {
+	font-family: var(--font-mono);
+}
+
+code {
+	font-size: 0.9em;
+	background: var(--color-surface-raised);
+	padding: 0.2em 0.4em;
+	border-radius: var(--radius-xs);
+}
+
+pre {
+	background: var(--color-surface-raised);
+	padding: var(--space-m);
+	border-radius: var(--radius-m);
+	overflow-x: auto;
+	margin: var(--space-m) 0;
+	border: 1px solid var(--color-line);
+}
+
+pre code {
+	background: none;
+	padding: 0;
+}
+
+/* =========================
+   Details/Summary
+   ========================= */
+
+details {
+	background: var(--color-surface);
+	padding: var(--space-m);
+	border-radius: var(--radius-l);
+	border: 1px solid var(--color-line);
+	margin: var(--space-m) 0;
+}
+
+summary {
+	cursor: pointer;
+	font-weight: 600;
+	user-select: none;
+}
+
+summary:hover {
+	color: var(--color-primary);
+}
+
+details[open] summary {
+	margin-bottom: var(--space-s);
+	padding-bottom: var(--space-s);
+	border-bottom: 1px solid var(--color-line);
+}
+
+/* =========================
+   Focus States
+   ========================= */
+
+:focus-visible {
+	outline: 2px solid var(--color-primary);
+	outline-offset: 2px;
+}
+
+/* =========================
+   Utilities
+   ========================= */
+
+:target {
+	scroll-margin-block: 5ex;
+}
+
+/* =========================
+   Component Hooks
+   ========================= */
+
+diagnostics-panel {
+	--diagnostics-padding: var(--space-xl);
+	--diagnostics-title-font: var(--font-ui);
+	--diagnostics-title-color: var(--color-primary);
+	--diagnostics-gap: var(--space-l);
+}
+shell-ui {
+	--aside-width: 260px;
+	--aside-width-collapsed: 72px;
+	--avatar-size: 48px;
+	--contact-avatar-size: 40px;
+	--spinner-size: 40px;
+}

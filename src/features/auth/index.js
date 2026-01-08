@@ -1,75 +1,189 @@
-// Auth Feature
-import { authMachine } from "./auth.machine.js";
-import { createActor } from "xstate";
+// src/features/auth/index.js
+
+import { createAuthMachine } from './auth.machine.js';
+import { AuthService } from './auth.service.js';
+import { AuthRepository } from './auth.repository.js';
+import { createActor } from 'xstate';
+
+import './auth.ui.js';
+
+// Встраиваем CryptoService прямо сюда (или можно вынести в auth.crypto.js)
+class AuthCryptoService {
+	constructor(workerUrl = '/workers/crypto.worker.js') {
+		this.workerUrl = workerUrl;
+		this.worker = null;
+		this.pending = new Map();
+		this.requestId = 0;
+	}
+
+	async init() {
+		if (this.worker) return;
+
+		this.worker = new Worker(new URL(this.workerUrl, window.location.origin));
+
+		this.worker.onmessage = (e) => {
+			const { requestId, result, error } = e.data;
+			const entry = this.pending.get(requestId);
+			if (!entry) return;
+
+			error ? entry.reject(new Error(error)) : entry.resolve(result);
+			this.pending.delete(requestId);
+		};
+
+		this.worker.onerror = (err) => {
+			console.error('[AuthCryptoService] Worker error:', err);
+			for (const { reject } of this.pending.values()) {
+				reject(new Error('CryptoWorker crashed'));
+			}
+			this.pending.clear();
+		};
+	}
+
+	async request(method, params = {}) {
+		await this.init();
+
+		const id = this.requestId++;
+
+		return new Promise((resolve, reject) => {
+			this.pending.set(id, { resolve, reject });
+
+			this.worker.postMessage({
+				requestId: id,
+				method,
+				params,
+			});
+
+			setTimeout(() => {
+				if (this.pending.has(id)) {
+					this.pending.delete(id);
+					reject(new Error(`Crypto timeout: ${method}`));
+				}
+			}, 30_000);
+		});
+	}
+
+	// Методы, используемые в auth
+	generateIdentity() {
+		return this.request('generateIdentity');
+	}
+
+	async destroy() {
+		if (this.worker) {
+			this.worker.terminate();
+			this.worker = null;
+		}
+	}
+}
 
 export const authFeature = {
-	id: "auth",
-	name: "Authentication",
-	version: "1.0.0",
+	id: 'auth',
+	name: 'Authentication',
+	version: '1.0.0',
 
-	dependencies: ["identity", "persistence"],
+	// ✅ Теперь зависим ТОЛЬКО от persistence
+	dependencies: ['persistence'],
 
-	async onMount(context) {
-		const { eventBus, actorRegistry } = context;
+	ui: {
+		screen: 'auth-screen',
+		profile: 'profile-screen',
+	},
 
-		// Create auth actor
-		const actor = createActor(authMachine, {
-			id: "auth",
-		});
+	async onMount(mountContext) {
+		console.log('🔐 Mounting Auth feature...');
 
-		// Запускаем актор
-		actor.start();
+		// Получаем persistence
+		const persistenceResult =
+			mountContext.featureRegistry.getMountResult('persistence');
 
-		// Регистрируем актор
-		actorRegistry.register("auth", actor, {
-			type: "feature",
-			featureId: "auth",
-		});
-
-		// Подписываемся на события актора
-		actor.subscribe((snapshot) => {
-			if (snapshot.matches("authenticated")) {
-				// Отправляем глобальное событие
-				eventBus.dispatch(
-					{
-						type: "AUTH_SUCCESS",
-						userId: snapshot.context.userId,
-					},
-					"HIGH"
-				);
-			}
-			if (snapshot.matches("unauthenticated")) {
-				eventBus.dispatch({ type: "AUTH_LOGOUT" }, "HIGH");
-			}
-		});
-
-		// Подписываемся на UI события
-		if (typeof window !== "undefined") {
-			window.addEventListener("auth-login", (e) => {
-				actor.send({
-					type: "LOGIN",
-					username: e.detail.username,
-					password: e.detail.password,
-				});
-			});
-
-			window.addEventListener("auth-signup", (e) => {
-				actor.send({
-					type: "SIGNUP",
-					username: e.detail.username,
-					password: e.detail.password,
-				});
-			});
+		if (!persistenceResult?.service) {
+			throw new Error('Persistence service not available');
 		}
 
-		return { actor };
+		const storage = persistenceResult.service;
+
+		// ✅ Создаём СВОЙ crypto service
+		const cryptoService = new AuthCryptoService();
+		await cryptoService.init();
+
+		// Создаём сервисы
+		const authService = new AuthService(cryptoService);
+		const authRepo = new AuthRepository(storage);
+
+		// Создаём машину
+		const machine = createAuthMachine({
+			authService,
+			authRepo,
+			cryptoService,
+		});
+
+		const actor = createActor(machine, {
+			inspect: (event) => {
+				if (event.type === '@xstate.snapshot') {
+					console.log('🔐 Auth state:', event.snapshot.value);
+				}
+			},
+		});
+
+		actor.start();
+
+		console.log('✅ Auth feature mounted');
+
+		return {
+			actor,
+			authService,
+			authRepo,
+			cryptoService, // ✅ Экспортируем для других фич, если нужно
+
+			// Хелперы
+			isAuthenticated: () => actor.getSnapshot().matches('authenticated'),
+
+			getUser: () => {
+				const snapshot = actor.getSnapshot();
+				if (snapshot.matches('authenticated')) {
+					return {
+						username: snapshot.context.username,
+						identity: snapshot.context.identity,
+					};
+				}
+				return null;
+			},
+
+			waitForAuth: () =>
+				new Promise((resolve, reject) => {
+					const check = () => {
+						const snapshot = actor.getSnapshot();
+						if (snapshot.matches('authenticated')) {
+							resolve(snapshot.context);
+						}
+					};
+
+					check();
+
+					const sub = actor.subscribe((snapshot) => {
+						if (snapshot.matches('authenticated')) {
+							sub.unsubscribe();
+							resolve(snapshot.context);
+						}
+					});
+				}),
+		};
 	},
 
 	async onUnmount(context) {
-		context.actorRegistry.unregister("auth");
+		const { actor, cryptoService } = context;
+
+		// При размонтировании — логаут
+		if (actor.getSnapshot().matches('authenticated')) {
+			actor.send({ type: 'LOGOUT' });
+		}
+
+		actor.stop();
+
+		// ✅ Уничтожаем воркер
+		if (cryptoService) {
+			await cryptoService.destroy();
+		}
+
+		console.log('🔐 Auth feature unmounted');
 	},
-
-	subscribedEvents: ["APP_READY", "LOGOUT", "SESSION_EXPIRED"],
-
-	emittedEvents: ["AUTH_SUCCESS", "AUTH_FAILED", "AUTH_LOGOUT"],
 };

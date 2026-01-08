@@ -11,7 +11,7 @@ export function setMountContext(context) {
 
 export const appMachine = setup({
 	types: {
-		context: {},
+		context: {}, 
 		events: {},
 	},
 
