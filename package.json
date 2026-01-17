@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@ionic/core": "^8.7.17",
     "lit": "^3.3.2",
     "xstate": "^5.25.0"
   },
