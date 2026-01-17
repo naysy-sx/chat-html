@@ -3,7 +3,7 @@ export class PersistenceService {
 	constructor() {
 		this.db = null;
 		this.dbName = 'ChatAppDB';
-		this.dbVersion = 2;
+		this.dbVersion = 3; // ✅ Версия 3
 		this.writeQueue = [];
 		this.flushTimer = null;
 		this.flushInterval = 100; // 100ms
@@ -20,23 +20,34 @@ export class PersistenceService {
 
 			request.onsuccess = () => {
 				this.db = request.result;
-				console.log('📦 IndexedDB opened:', this.dbName);
+				console.log(
+					'📦 IndexedDB opened:',
+					this.dbName,
+					'version:',
+					this.dbVersion
+				);
 				resolve();
 			};
 
 			request.onupgradeneeded = (event) => {
 				const db = event.target.result;
+				const oldVersion = event.oldVersion;
 
-				// Создаём stores
-				this.createStores(db);
+				console.log(
+					`🔄 Upgrading DB from version ${oldVersion} to ${this.dbVersion}`
+				);
+
+				// Создаём/обновляем stores
+				this.upgradeStores(db, oldVersion);
 			};
 		});
 	}
 
-	createStores(db) {
+	upgradeStores(db, oldVersion) {
 		// Store для общих данных (settings, session, etc)
 		if (!db.objectStoreNames.contains('data')) {
 			db.createObjectStore('data', { keyPath: 'key' });
+			console.log('✅ Created store: data');
 		}
 
 		// Store для сообщений
@@ -47,17 +58,41 @@ export class PersistenceService {
 			});
 			messagesStore.createIndex('contactId', 'contactId', { unique: false });
 			messagesStore.createIndex('timestamp', 'timestamp', { unique: false });
+			messagesStore.createIndex('owner', 'owner', { unique: false });
+			console.log('✅ Created store: messages');
 		}
 
-		// Store для контактов
-		if (!db.objectStoreNames.contains('contacts')) {
-			db.createObjectStore('contacts', { keyPath: 'id' });
+		// ✅ МИГРАЦИЯ: Store для контактов с изменением keyPath
+		if (oldVersion < 3) {
+			// Если обновляемся с версии 2 или меньше
+			if (db.objectStoreNames.contains('contacts')) {
+				console.log('🔄 Migrating contacts store from v2 to v3...');
+
+				// Удаляем старый store (данные потеряются, но это OK для миграции)
+				db.deleteObjectStore('contacts');
+				console.log('🗑️ Deleted old contacts store');
+			}
+
+			// Создаём новый store с правильным keyPath
+			const contactsStore = db.createObjectStore('contacts', {
+				keyPath: 'compositeKey', // ✅ Составной ключ owner:contactId
+			});
+
+			// Добавляем индексы
+			contactsStore.createIndex('owner', 'owner', { unique: false });
+			contactsStore.createIndex('status', 'status', { unique: false });
+
+			console.log('✅ Created new contacts store with compositeKey');
 		}
+
+		// Store для пользователей
 		if (!db.objectStoreNames.contains('users')) {
 			const usersStore = db.createObjectStore('users', { keyPath: 'username' });
 			usersStore.createIndex('createdAt', 'createdAt', { unique: false });
+			console.log('✅ Created store: users');
 		}
-		console.log('📦 Stores created');
+
+		console.log('📦 All stores ready');
 	}
 
 	// === ОСНОВНЫЕ МЕТОДЫ ===
@@ -284,6 +319,7 @@ export class PersistenceService {
 		await this.clear('messages');
 		await this.clear('contacts');
 	}
+
 	async getUser(username) {
 		return new Promise((resolve, reject) => {
 			const tx = this.db.transaction(['users'], 'readonly');
@@ -308,7 +344,7 @@ export class PersistenceService {
 			};
 
 			tx.onerror = () => reject(tx.error);
-			request.onerror = () => reject(request.error); // На всякий случай ловим ошибку запроса
+			request.onerror = () => reject(request.error);
 		});
 	}
 

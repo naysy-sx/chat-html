@@ -39,13 +39,51 @@ export class ServersSection extends LitElement {
 				font-size: var(--text-sm);
 			}
 
+			.current-server {
+				display: flex;
+				align-items: center;
+				gap: var(--space-s);
+			}
+
 			/* Статус сервера */
+
+			.server-url {
+				padding: 2px 6px;
+				background: var(--color-bg);
+				border-radius: var(--radius-s);
+				font-family: var(--font-mono);
+				font-size: var(--text-sm);
+			}
+
 			.server-status {
-				margin-top: var(--space-m);
 				padding: var(--space-m);
+				border: 2px solid;
 				border-radius: var(--radius-m);
-				background: var(--color-bg-secondary);
-				border: 2px solid transparent;
+				margin-top: var(--space-m);
+			}
+
+			.server-main-line {
+				margin-bottom: var(--space-m);
+			}
+
+			.server-status-text {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				font-weight: 500;
+				margin-bottom: var(--space-s);
+			}
+
+			.server-controls {
+				display: grid;
+				grid-template-columns: 1fr auto;
+				gap: var(--space-s);
+				align-items: center;
+			}
+
+			.server-help {
+				font-size: var(--text-xs);
+				color: var(--color-text-muted);
 			}
 
 			.server-status.status-connected {
@@ -258,7 +296,6 @@ export class ServersSection extends LitElement {
 
 		return configs[this._signalingState] || configs.idle;
 	}
-
 	render() {
 		const activeServer = this._activeServer;
 		const statusConfig = this._getStatusConfig();
@@ -267,42 +304,63 @@ export class ServersSection extends LitElement {
 			<div class="section">
 				<h2 class="section-title">📡 Сигнальные серверы</h2>
 
-				<!-- Текущий сервер -->
-				${activeServer
-					? html`
-							<div class="form-group">
-								<label class="label">Текущий сервер</label>
-								<div class="current-server">
-									<code class="server-url">${activeServer.url}</code>
-									${!activeServer.isDefault
-										? html`
-												<button
-													class="btn btn--danger"
-													@click=${() => this._handleRemove(activeServer.id)}
-												>
-													Удалить
-												</button>
-										  `
-										: ''}
-								</div>
-							</div>
-					  `
-					: ''}
-
-				<!-- Статус подключения -->
 				<div class="server-status ${statusConfig.cssClass}">
-					<div class="status-header">
-						<div class="status-indicator ${statusConfig.indicatorClass}"></div>
-						<div class="status-title">
-							${statusConfig.icon} ${statusConfig.title}
-						</div>
+					<!-- Верхняя строка -->
+					<div class="server-main-line">
+						<strong>Текущий сервер:</strong>
+
+						${activeServer
+							? html`<code class="server-url">${activeServer.url}</code>`
+							: html`<span>—</span>`}
+						${activeServer && !activeServer.isDefault
+							? html`
+									<button
+										class="btn btn--danger btn--xs"
+										@click=${() => this._handleRemove(activeServer.id)}
+									>
+										Удалить
+									</button>
+							  `
+							: ''}
 					</div>
-					<div class="status-details">${statusConfig.description}</div>
+
+					<!-- Управление -->
+					<div class="server-controls">
+						<select
+							class="select"
+							.value=${this.activeServerId || ''}
+							@change=${this._handleSelect}
+						>
+							${this.servers?.map(
+								(server) => html`
+									<option value=${server.id}>
+										${server.label} ${server.isDefault ? '(по умолчанию)' : ''}
+									</option>
+								`
+							)}
+						</select>
+
+						<button class="btn btn--secondary" @click=${this._handleAdd}>
+							➕ Добавить
+						</button>
+					</div>
+
+					<!-- Детали / ошибки -->
+					<div class="status-details">
+						<span class="server-status-text">
+							<div
+								class="status-indicator ${statusConfig.indicatorClass}"
+							></div>
+							${statusConfig.title} ${statusConfig.icon}
+						</span>
+						${statusConfig.description}
+					</div>
 
 					${this._signalingError
 						? html`
 								<div class="status-error">
-									<strong>Ошибка:</strong> ${this._signalingError}
+									<strong>Ошибка:</strong>
+									${this._signalingError}
 								</div>
 						  `
 						: ''}
@@ -314,35 +372,13 @@ export class ServersSection extends LitElement {
 								</div>
 						  `
 						: ''}
+
+					<!-- Примечание -->
+					<div class="server-help">
+						Вы можете добавить собственные сигнальные серверы для установки
+						соединений
+					</div>
 				</div>
-
-				<!-- Выбор сервера -->
-				<div class="form-group">
-					<label class="label">Выбрать сервер</label>
-					<select
-						class="select"
-						.value=${this.activeServerId || ''}
-						@change=${this._handleSelect}
-					>
-						${this.servers?.map(
-							(server) => html`
-								<option value=${server.id}>
-									${server.label} ${server.isDefault ? '(по умолчанию)' : ''}
-								</option>
-							`
-						)}
-					</select>
-				</div>
-
-				<!-- Добавить сервер -->
-				<button class="btn btn--secondary" @click=${this._handleAdd}>
-					➕ Добавить сигнальный сервер
-				</button>
-
-				<p class="help-text" style="margin-top: var(--space-m);">
-					Вы можете добавить собственные сигнальные серверы для установки
-					соединений
-				</p>
 			</div>
 		`;
 	}

@@ -43,6 +43,13 @@ export class SignalingService {
 		url.searchParams.set('action', 'poll');
 		url.searchParams.set('userId', userId);
 
+		console.log(
+			'📡 Poll request:',
+			userId.slice(0, 16) + '...',
+			'URL:',
+			url.toString()
+		);
+
 		try {
 			const response = await fetch(url.toString(), {
 				method: 'GET',
@@ -59,10 +66,19 @@ export class SignalingService {
 				throw new Error(data.error || 'Poll failed');
 			}
 
-			return data.data?.events || [];
+			const events = data.data?.events || [];
+			if (events.length > 0) {
+				console.log(
+					'📨 Poll got',
+					events.length,
+					'event(s) for',
+					userId.slice(0, 16) + '...'
+				);
+			}
+
+			return events;
 		} catch (error) {
 			if (error.name === 'AbortError') {
-				// Нормальная отмена — не логируем как ошибку
 				return [];
 			}
 			throw error;
@@ -72,24 +88,28 @@ export class SignalingService {
 	/**
 	 * Отправить приглашение
 	 */
-	async sendInvite(from, fromName, to, publicKey) {
+	async sendInvite(from, fromName, to, publicKey, profile = null) {
 		return this._request('invite', {
 			from,
 			fromName,
 			to,
 			publicKey,
+			avatar: profile?.avatar || null,
+			bio: profile?.bio || null,
 		});
 	}
 
 	/**
 	 * Принять приглашение
 	 */
-	async acceptInvite(from, fromName, to, publicKey) {
+	async acceptInvite(from, fromName, to, publicKey, profile = null) {
 		return this._request('accept_invite', {
 			from,
 			fromName,
 			to,
 			publicKey,
+			avatar: profile?.avatar || null,
+			bio: profile?.bio || null,
 		});
 	}
 
@@ -137,7 +157,12 @@ export class SignalingService {
 			to,
 		});
 	}
-
+	async blockContact(from, to) {
+		return this._request('block_contact', {
+			from,
+			to,
+		});
+	}
 	/**
 	 * Получить статусы контактов
 	 */
@@ -148,7 +173,6 @@ export class SignalingService {
 		});
 		return result.statuses || {};
 	}
-
 	/**
 	 * Базовый метод для POST-запросов
 	 */
@@ -175,5 +199,24 @@ export class SignalingService {
 		}
 
 		return data.data;
+	}
+	/**
+	 * Отправить обновление профиля всем контактам из списка
+	 */
+	async broadcastProfile(from, contactIds, profile) {
+		const promises = contactIds.map((toUserId) =>
+			this.sendProfile(from, toUserId, profile).catch((err) => {
+				console.warn(
+					`⚠️ Failed to send profile to ${toUserId.slice(0, 16)}:`,
+					err.message
+				);
+				// Не прерываем весь процесс из-за одной ошибки
+			})
+		);
+
+		await Promise.allSettled(promises);
+		console.log(
+			`📢 Profile broadcast completed to ${contactIds.length} contacts`
+		);
 	}
 }

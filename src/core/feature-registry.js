@@ -39,26 +39,42 @@ class FeatureRegistry {
 	async mountAll(context) {
 		this.setContext(context);
 		const sorted = this.topologicalSort();
+		console.log('═══════════════════════════════════════════════');
+		console.log('🔧 MOUNTING ALL FEATURES');
+		console.log('📋 Sorted order:', sorted);
+		console.log('═══════════════════════════════════════════════');
 
 		for (const featureId of sorted) {
+			console.log(`\n  ⬆️  Mounting: ${featureId}...`);
 			await this.mount(featureId, context);
+			console.log(`  ✅ Mounted: ${featureId}`);
 		}
+		console.log('\n═══════════════════════════════════════════════');
+		console.log('🎉 ALL FEATURES MOUNTED SUCCESSFULLY');
+		console.log('═══════════════════════════════════════════════\n');
 	}
 
 	async mount(featureId, context) {
 		const feature = this.features.get(featureId);
 		if (!feature) {
+			console.error(`❌ Feature ${featureId} not found in registry!`);
 			throw new Error(`Feature ${featureId} not found`);
 		}
 
 		if (this.mounted.has(featureId)) {
+			console.log(`⏭️ Feature ${featureId} already mounted, skipping`);
 			return; // уже смонтирована
 		}
 
 		// Проверяем зависимости
 		if (feature.dependencies) {
+			console.log(
+				`🔧 Feature ${featureId} has dependencies:`,
+				feature.dependencies
+			);
 			for (const depId of feature.dependencies) {
 				if (!this.mounted.has(depId)) {
+					console.log(`🔧 Mounting dependency ${depId} before ${featureId}`);
 					await this.mount(depId, context);
 				}
 			}
@@ -66,8 +82,16 @@ class FeatureRegistry {
 
 		console.log(`⬆️ Mounting feature: ${featureId}`);
 
-		const result = await feature.onMount(context);
-		this.mounted.set(featureId, result || {});
+		try {
+			const result = await feature.onMount(context);
+			console.log(`     ✅ onMount() completed, result:`, result);
+			this.mounted.set(featureId, result || {});
+		} catch (err) {
+			console.error(`\n  ❌❌❌ ERROR mounting ${featureId}:`, err);
+			console.error(`     Error message: ${err.message}`);
+			console.error(`     Stack: ${err.stack}`);
+			throw err;
+		}
 
 		// Подписываемся на события
 		if (feature.subscribedEvents && context.eventBus) {
@@ -150,7 +174,7 @@ class FeatureRegistry {
 
 	validateFeature(feature) {
 		if (!feature.id || !feature.name) {
-			throw new Error("Feature must have id and name");
+			throw new Error('Feature must have id and name');
 		}
 
 		if (!feature.onMount) {

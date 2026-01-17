@@ -1,6 +1,6 @@
-// src/features/settings/ui/index.js
+// src/features/profile/ui/index.js
 
-export { SettingsView } from './settings-view.js';
+export { ProfileView } from './profile-view.js';
 
 // Секции экспортируем на случай если понадобятся отдельно
 export { ProfileSection } from './sections/profile-section.js';

@@ -1,6 +1,6 @@
-// src/features/settings/ui/settings-view.js
+// src/features/profile/ui/profile-view.js
 import { LitElement, html } from 'lit';
-import { settingsViewStyles } from './settings-view.css.js';
+import { profileViewStyles } from './profile-view.css.js';
 
 // Импортируем секции
 import './sections/profile-section.js';
@@ -9,9 +9,9 @@ import './sections/discovery-section.js';
 import './sections/invitation-section.js';
 import './sections/servers-section.js';
 
-export class SettingsView extends LitElement {
+export class ProfileView extends LitElement {
 	static properties = {
-		settingsActor: { type: Object },
+		profileActor: { type: Object },
 		actorRegistry: { type: Object }, // 👈 Добавляем
 
 		_state: { state: true },
@@ -23,7 +23,7 @@ export class SettingsView extends LitElement {
 		_signalingActor: { state: true }, // 👈 Добавляем
 	};
 
-	static styles = settingsViewStyles;
+	static styles = profileViewStyles;
 
 	constructor() {
 		super();
@@ -39,9 +39,13 @@ export class SettingsView extends LitElement {
 
 	connectedCallback() {
 		super.connectedCallback();
+		console.log(
+			'[profile-view] connectedCallback, profileActor:',
+			this.profileActor ? 'exists' : 'NULL'
+		);
 		this._subscribe();
-		this._subscribeToSignaling(); // 👈 Слушаем eventBus на SIGNALING_READY
-		this._subscribeToSignalingReady(); // 👈 Дополнительная подписка на событие
+		this._subscribeToSignaling();
+		this._subscribeToSignalingReady();
 	}
 
 	disconnectedCallback() {
@@ -55,46 +59,91 @@ export class SettingsView extends LitElement {
 
 	updated(changedProperties) {
 		console.log(
-			'[settings] updated called with properties:',
-			Array.from(changedProperties.keys())
+			'[profile-view] updated called with properties:',
+			Array.from(changedProperties.keys()),
+			'profileActor:',
+			this.profileActor ? 'exists' : 'NULL'
 		);
-		if (changedProperties.has('settingsActor') && this.settingsActor) {
+		if (changedProperties.has('profileActor') && this.profileActor) {
+			console.log('[profile-view] profileActor changed, re-subscribing');
 			this._subscribe();
 		}
-		// 👇 Добавляем
 		if (changedProperties.has('actorRegistry') && this.actorRegistry) {
-			console.log('[settings] actorRegistry changed, subscribing to signaling');
+			console.log(
+				'[profile-view] actorRegistry changed, subscribing to signaling'
+			);
 			this._subscribeToSignaling();
 		}
 	}
 
 	_subscribe() {
-		if (!this.settingsActor) return;
+		console.log(
+			'[profile-view] _subscribe called, profileActor:',
+			this.profileActor ? 'exists' : 'NULL'
+		);
+		if (!this.profileActor) {
+			console.warn('[profile-view] No profileActor provided');
+			return;
+		}
 
 		this._subscription?.unsubscribe();
 
 		const sync = (snapshot) => {
-			this._state = snapshot.value;
+			// Определяем строковое состояние для UI
+			if (snapshot.matches('ready')) {
+				this._state = 'ready';
+			} else if (snapshot.matches('loading')) {
+				this._state = 'loading';
+			} else if (snapshot.matches('savingProfile')) {
+				this._state = 'savingProfile';
+			} else if (snapshot.matches('processingAvatar')) {
+				this._state = 'processingAvatar';
+			} else if (snapshot.matches('savingServers')) {
+				this._state = 'savingServers';
+			} else if (snapshot.matches('changingPassword')) {
+				this._state = 'changingPassword';
+			} else {
+				this._state = 'loading';
+			}
+
 			this._profile = snapshot.context.profile;
 			this._servers = snapshot.context.signalingServers;
 			this._activeServerId = snapshot.context.activeServerId;
 			this._identity = snapshot.context.identity;
 			this._error = snapshot.context.error;
+
+			console.log(
+				'[profile-view] State:',
+				this._state,
+				'Has profile:',
+				!!this._profile,
+				'Has servers:',
+				this._servers?.length
+			);
+
+			this.requestUpdate();
 		};
 
-		sync(this.settingsActor.getSnapshot());
-		this._subscription = this.settingsActor.subscribe(sync);
+		const initialSnapshot = this.profileActor.getSnapshot();
+		console.log('[profile-view] Initial snapshot:', {
+			state: initialSnapshot.value,
+			hasProfile: !!initialSnapshot.context.profile,
+			hasServers: !!initialSnapshot.context.signalingServers?.length,
+		});
+
+		sync(initialSnapshot);
+		this._subscription = this.profileActor.subscribe(sync);
 	}
 
 	// 👇 Добавляем метод для получения signaling actor
 
 	_subscribeToSignaling() {
 		console.log(
-			'[settings] _subscribeToSignaling called, actorRegistry:',
+			'[profile] _subscribeToSignaling called, actorRegistry:',
 			this.actorRegistry
 		);
 		if (!this.actorRegistry) {
-			console.warn('[settings] No actorRegistry provided, cannot subscribe');
+			console.warn('[profile] No actorRegistry provided, cannot subscribe');
 			return;
 		}
 
@@ -104,10 +153,10 @@ export class SettingsView extends LitElement {
 		// { type: 'sync', actors: Map }
 		// { type: 'registered', id, entry, actors: Map }
 		// { type: 'unregistered', id, reason, actors: Map }
-		console.log('[settings] Subscribing to actorRegistry');
+		console.log('[profile] Subscribing to actorRegistry');
 		this._unsubRegistry = this.actorRegistry.subscribe((event) => {
 			console.log(
-				'[settings] ActorRegistry event:',
+				'[profile] ActorRegistry event:',
 				event.type,
 				'actors:',
 				event.actors?.size
@@ -120,13 +169,13 @@ export class SettingsView extends LitElement {
 			const signaling = signalingEntry?.actor || null;
 
 			console.log(
-				'[settings] Signaling from registry:',
+				'[profile] Signaling from registry:',
 				signaling ? 'found' : 'not found'
 			);
 
 			if (signaling && signaling !== this._signalingActor) {
 				console.log(
-					'[settings] Binding signaling actor from registry:',
+					'[profile] Binding signaling actor from registry:',
 					signaling
 				);
 				this._signalingActor = signaling;
@@ -134,7 +183,7 @@ export class SettingsView extends LitElement {
 			}
 
 			if (!signaling && this._signalingActor) {
-				console.log('[settings] Signaling actor removed');
+				console.log('[profile] Signaling actor removed');
 				this._signalingActor = null;
 				this.requestUpdate();
 			}
@@ -146,17 +195,17 @@ export class SettingsView extends LitElement {
 		// Это гарантирует, что UI получит актор, даже если registry еще не синхронизировался
 		const eventBus = window.appContext?.eventBus;
 		if (!eventBus) {
-			console.warn('[settings] No eventBus found in window.appContext');
+			console.warn('[profile] No eventBus found in window.appContext');
 			return;
 		}
 
-		console.log('[settings] Subscribing to SIGNALING_READY event');
+		console.log('[profile] Subscribing to SIGNALING_READY event');
 
 		this._onSignalingReady = (event) => {
-			console.log('[settings] SIGNALING_READY event received:', event);
+			console.log('[profile] SIGNALING_READY event received:', event);
 			if (event.actor && event.actor !== this._signalingActor) {
 				console.log(
-					'[settings] Binding signaling actor from SIGNALING_READY event:',
+					'[profile] Binding signaling actor from SIGNALING_READY event:',
 					event.actor
 				);
 				this._signalingActor = event.actor;
@@ -168,7 +217,7 @@ export class SettingsView extends LitElement {
 	}
 
 	get _service() {
-		return this.settingsActor?.getSnapshot().context.service;
+		return this.profileActor?.getSnapshot().context.service;
 	}
 
 	render() {
@@ -177,25 +226,25 @@ export class SettingsView extends LitElement {
 		}
 
 		return html`
-			<div class="settings-container">
+			<div class="profile-container">
 				${this._error
 					? html`<div class="error-banner">⚠️ ${this._error}</div>`
 					: ''}
 
 				<profile-section
-					.actor=${this.settingsActor}
+					.actor=${this.profileActor}
 					.profile=${this._profile}
 					.state=${this._state}
 				></profile-section>
 
 				<security-section
-					.actor=${this.settingsActor}
+					.actor=${this.profileActor}
 					.username=${this._profile?.username}
 					.state=${this._state}
 				></security-section>
 
 				<discovery-section
-					.actor=${this.settingsActor}
+					.actor=${this.profileActor}
 					.enabled=${this._profile?.showInDiscovery || false}
 				></discovery-section>
 
@@ -205,7 +254,7 @@ export class SettingsView extends LitElement {
 				></invitation-section>
 
 				<servers-section
-					.actor=${this.settingsActor}
+					.actor=${this.profileActor}
 					.servers=${this._servers}
 					.activeServerId=${this._activeServerId}
 					.signalingActor=${this._signalingActor}
@@ -215,4 +264,4 @@ export class SettingsView extends LitElement {
 	}
 }
 
-customElements.define('settings-view', SettingsView);
+customElements.define('profile-view', ProfileView);

@@ -1,8 +1,8 @@
-// src/features/settings/settings.machine.js
+// src/features/profile/profile.machine.js
 
 import { setup, assign, fromPromise } from 'xstate';
 
-export function createSettingsMachine({
+export function createProfileMachine({
 	repo,
 	service,
 	username,
@@ -59,7 +59,13 @@ export function createSettingsMachine({
 						'HIGH'
 					);
 				}
-
+				eventBus.dispatch(
+					{
+						type: 'PROFILE_SHOULD_BROADCAST',
+						profile: { ...profile },
+					},
+					'MEDIUM'
+				);
 				return profile;
 			}),
 
@@ -141,10 +147,6 @@ export function createSettingsMachine({
 				await authRepo.saveUserData(username, 'identity', encryptedIdentity);
 
 				// Затем обновляем хеш пароля и соль пользователя
-				await authRepo.updateUser(username, {
-					passwordHash: hash,
-					salt,
-				});
 				await authRepo.updateUser(username, {
 					passwordHash: hash,
 					salt,
@@ -251,7 +253,7 @@ export function createSettingsMachine({
 			}),
 
 			logSaved: () => {
-				console.log('✅ Settings saved');
+				console.log('✅ Profile saved');
 			},
 
 			setPasswordSuccess: assign({
@@ -277,7 +279,7 @@ export function createSettingsMachine({
 			hasProfile: ({ context }) => !!context.profile,
 		},
 	}).createMachine({
-		id: 'settings',
+		id: 'profile',
 		initial: 'loading',
 
 		context: {

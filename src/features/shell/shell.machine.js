@@ -11,23 +11,49 @@ export function createShellMachine({ authActor }) {
 
 		actions: {
 			// Навигация
+			navigateToMessages: assign({
+				currentScreen: 'messages',
+				activeContactId: null,
+			}),
+
+			navigateToContacts: assign({
+				currentScreen: 'contacts',
+				activeContactId: null,
+			}),
+
+			navigateToJournal: assign({
+				currentScreen: 'journal',
+				activeContactId: null,
+			}),
+
+			navigateToDiscovery: assign({
+				currentScreen: 'discovery',
+				activeContactId: null,
+			}),
+
 			navigateToSettings: assign({
 				currentScreen: 'settings',
 				activeContactId: null,
 			}),
 
-			navigateToContacts: assign({
-				currentScreen: 'contactsList',
+			navigateToProfile: assign({
+				currentScreen: 'profile',
+				activeContactId: null,
+			}),
+
+			navigateToFiles: assign({
+				currentScreen: 'files',
 				activeContactId: null,
 			}),
 
 			navigateToChat: assign(({ event }) => ({
 				currentScreen: 'chat',
-				activeContactId: event.contactId,
+				activeContactId: event.contactId || null,
 			})),
 
 			clearActiveContact: assign({
 				activeContactId: null,
+				currentScreen: 'contacts',
 			}),
 
 			// Auth tracking
@@ -38,13 +64,15 @@ export function createShellMachine({ authActor }) {
 
 			logScreenChange: ({ context }) => {
 				console.log('📱 Screen changed:', context.currentScreen, {
-					activeContact: context.activeContactId,
+					activeContact: context.activeContactId?.slice(0, 16) || null,
 				});
 			},
 		},
 
 		guards: {
 			isAuthenticated: ({ context }) => context.isAuthenticated,
+			isNotAuthenticated: ({ event }) => !event.isAuthenticated,
+			eventIsAuthenticated: ({ event }) => event.isAuthenticated,
 		},
 	}).createMachine({
 		id: 'shell',
@@ -55,7 +83,7 @@ export function createShellMachine({ authActor }) {
 			authActor,
 
 			// Состояние навигации
-			currentScreen: 'settings', // 'settings' | 'contactsList' | 'chat'
+			currentScreen: 'messages', // по умолчанию показываем сообщения
 			activeContactId: null,
 
 			// Auth состояние (копия из authActor)
@@ -65,7 +93,6 @@ export function createShellMachine({ authActor }) {
 
 		states: {
 			loading: {
-				// Ждём пока auth инициализируется
 				always: [
 					{
 						guard: 'isAuthenticated',
@@ -78,70 +105,77 @@ export function createShellMachine({ authActor }) {
 			},
 
 			guest: {
-				// Пользователь не залогинен - показываем auth screen
-				// Shell UI сам решит что показать
 				on: {
 					AUTH_STATE_CHANGED: {
 						actions: 'updateAuthState',
 						target: 'authenticated',
-						guard: ({ event }) => event.isAuthenticated,
+						guard: 'eventIsAuthenticated',
 					},
 				},
 			},
 
 			authenticated: {
-				// Пользователь залогинен - показываем app
-				initial: 'settings',
+				initial: 'idle',
 
+				// Глобальные события для authenticated состояния
 				on: {
 					AUTH_STATE_CHANGED: [
 						{
 							actions: 'updateAuthState',
 							target: 'guest',
-							guard: ({ event }) => !event.isAuthenticated,
+							guard: 'isNotAuthenticated',
 						},
 						{
 							actions: 'updateAuthState',
 						},
 					],
+
+					// Навигация
+					NAVIGATE_TO_MESSAGES: {
+						actions: ['navigateToMessages', 'logScreenChange'],
+					},
+
+					NAVIGATE_TO_CONTACTS: {
+						actions: ['navigateToContacts', 'logScreenChange'],
+					},
+
+					NAVIGATE_TO_JOURNAL: {
+						actions: ['navigateToJournal', 'logScreenChange'],
+					},
+
+					NAVIGATE_TO_DISCOVERY: {
+						actions: ['navigateToDiscovery', 'logScreenChange'],
+					},
+
+					NAVIGATE_TO_SETTINGS: {
+						actions: ['navigateToSettings', 'logScreenChange'],
+					},
+
+					NAVIGATE_TO_PROFILE: {
+						actions: ['navigateToProfile', 'logScreenChange'],
+					},
+
+					NAVIGATE_TO_FILES: {
+						actions: ['navigateToFiles', 'logScreenChange'],
+					},
+
+					NAVIGATE_TO_CHAT: {
+						actions: ['navigateToChat', 'logScreenChange'],
+					},
+
+					OPEN_CHAT: {
+						actions: ['navigateToChat', 'logScreenChange'],
+					},
+
+					CLOSE_CHAT: {
+						actions: ['clearActiveContact', 'logScreenChange'],
+					},
 				},
 
 				states: {
-					settings: {
-						entry: ['navigateToSettings', 'logScreenChange'],
-						on: {
-							NAVIGATE_TO_CONTACTS: 'contactsList',
-						},
-					},
-
-					contactsList: {
-						entry: ['navigateToContacts', 'logScreenChange'],
-						on: {
-							NAVIGATE_TO_SETTINGS: 'settings',
-							OPEN_CHAT: {
-								target: 'chat',
-								actions: 'navigateToChat',
-							},
-						},
-					},
-
-					chat: {
-						entry: 'logScreenChange',
-						on: {
-							NAVIGATE_TO_SETTINGS: {
-								target: 'settings',
-								actions: 'clearActiveContact',
-							},
-							NAVIGATE_TO_CONTACTS: {
-								target: 'contactsList',
-								actions: 'clearActiveContact',
-							},
-							OPEN_CHAT: {
-								target: 'chat',
-								actions: 'navigateToChat',
-								reenter: true,
-							},
-						},
+					idle: {
+						// Маркерное состояние
+						// Вся логика навигации обрабатывается через context
 					},
 				},
 			},

@@ -6,6 +6,9 @@ export class SidebarPanel extends LitElement {
 	static properties = {
 		profile: { type: Object },
 		username: { type: String },
+		currentUserId: { type: String },
+		currentScreen: { type: String },
+		navigationItems: { type: Array }, // ← НОВОЕ!
 	};
 
 	static styles = [
@@ -15,24 +18,24 @@ export class SidebarPanel extends LitElement {
 			:host {
 				display: flex;
 				flex-direction: column;
-				width: 250px;
-				min-width: 250px;
+				width: 280px;
+				min-width: 280px;
 				background: var(--color-surface);
 				border-right: 1px solid var(--color-border);
 				overflow: hidden;
 			}
 
-			/* User Section */
+			/* User Profile Section */
 			.user-section {
 				padding: var(--space-m);
 				border-bottom: 1px solid var(--color-border);
+				flex-shrink: 0;
 			}
 
 			.user-profile {
 				display: flex;
 				align-items: center;
 				gap: var(--space-s);
-				margin-bottom: var(--space-s);
 			}
 
 			.user-info {
@@ -56,57 +59,76 @@ export class SidebarPanel extends LitElement {
 				text-overflow: ellipsis;
 			}
 
-			.settings-link {
-				display: block;
-				padding: var(--space-xs) var(--space-s);
-				color: var(--color-primary);
-				text-decoration: none;
-				font-size: var(--text-sm);
-				border-radius: var(--radius-m);
-				transition: background var(--transition-fast);
+			/* Navigation Menu */
+			.nav-section {
+				flex: 1;
+				overflow-y: auto;
+				padding: var(--space-s) 0;
 			}
 
-			.settings-link:hover {
+			.nav-group {
+				padding: var(--space-xs) 0;
+			}
+
+			.nav-item {
+				display: flex;
+				align-items: center;
+				gap: var(--space-s);
+				padding: var(--space-s) var(--space-m);
+				color: var(--color-text-main);
+				text-decoration: none;
+				font-size: var(--text-base);
+				cursor: pointer;
+				border: none;
+				background: none;
+				width: 100%;
+				text-align: left;
+				border-radius: var(--radius-m);
+				margin: 0 var(--space-xs);
+				width: calc(100% - var(--space-s));
+				transition: all var(--transition-fast);
+			}
+
+			.nav-item:hover {
 				background: var(--color-bg-hover);
 			}
 
-			/* Contacts Section */
-			.contacts-section {
-				flex: 1;
-				overflow-y: auto;
-				padding: var(--space-s);
-			}
-
-			.section-header {
-				font-size: var(--text-xs);
+			.nav-item.active {
+				background: var(--color-primary-soft, rgba(122, 92, 255, 0.1));
+				color: var(--color-primary);
 				font-weight: 600;
-				color: var(--color-text-muted);
-				text-transform: uppercase;
-				letter-spacing: 0.5px;
-				padding: var(--space-xs) var(--space-s);
-				margin-bottom: var(--space-xs);
 			}
 
-			.empty-state {
-				padding: var(--space-m);
+			.nav-item-icon {
+				font-size: 1.25rem;
+				width: 1.5rem;
 				text-align: center;
-				color: var(--color-text-muted);
-				font-size: var(--text-sm);
 			}
 
-			.add-contact-btn {
-				width: 100%;
-				margin-top: var(--space-s);
+			.nav-item-label {
+				flex: 1;
+			}
+
+			/* Logout Button */
+			.logout-btn {
+				width: calc(100% - var(--space-s));
+				margin: var(--space-xs);
 			}
 
 			@media (max-width: 768px) {
 				:host {
-					width: 200px;
-					min-width: 200px;
+					width: 240px;
+					min-width: 240px;
 				}
 			}
 		`,
 	];
+
+	constructor() {
+		super();
+		this.currentScreen = 'messages';
+		this.navigationItems = []; // по умолчанию пусто
+	}
 
 	get _displayName() {
 		return this.profile?.displayName || this.username || 'Пользователь';
@@ -120,9 +142,18 @@ export class SidebarPanel extends LitElement {
 		return this._displayName[0]?.toUpperCase() || '?';
 	}
 
+	/**
+	 * Фильтруем и сортируем пункты меню
+	 */
+	get _visibleItems() {
+		return this.navigationItems
+			.filter((item) => item.visible)
+			.sort((a, b) => a.order - b.order);
+	}
+
 	render() {
 		return html`
-			<!-- User Section -->
+			<!-- User Profile -->
 			<div class="user-section">
 				<div class="user-profile">
 					<div class="avatar">
@@ -135,42 +166,56 @@ export class SidebarPanel extends LitElement {
 						<div class="user-bio">${this._bio}</div>
 					</div>
 				</div>
-				<a href="#" class="settings-link" @click=${this._handleSettingsClick}>
-					⚙️ Изменить настройки
-				</a>
 			</div>
 
-			<!-- Contacts Section -->
-			<div class="contacts-section">
-				<div class="section-header">Контакты</div>
-				<div class="empty-state">У вас нет добавленных контактов</div>
-				<button
-					class="btn btn--primary add-contact-btn"
-					@click=${this._handleAddContact}
-				>
-					➕ Добавить контакт
-				</button>
-			</div>
+			<!-- Navigation Menu -->
+			<nav class="nav-section">
+				<div class="nav-group">
+					${this._visibleItems.map(
+						(item) => html`
+							<button
+								class="nav-item ${this.currentScreen === item.id
+									? 'active'
+									: ''}"
+								@click=${() => this._navigate(item.id)}
+							>
+								<span class="nav-item-icon">${item.icon}</span>
+								<span class="nav-item-label">${item.label}</span>
+							</button>
+						`
+					)}
+				</div>
+			</nav>
+
+			<!-- Logout Button -->
+			<button
+				class="btn btn--secondary logout-btn"
+				@click=${this._handleLogout}
+			>
+				🚪 Выйти
+			</button>
 		`;
 	}
 
-	_handleSettingsClick(e) {
-		e.preventDefault();
+	_navigate(screen) {
 		this.dispatchEvent(
-			new CustomEvent('navigate-settings', {
+			new CustomEvent('navigate', {
+				detail: { screen },
 				bubbles: true,
 				composed: true,
 			})
 		);
 	}
 
-	_handleAddContact() {
-		this.dispatchEvent(
-			new CustomEvent('add-contact', {
-				bubbles: true,
-				composed: true,
-			})
-		);
+	_handleLogout() {
+		if (confirm('Выйти из аккаунта?')) {
+			this.dispatchEvent(
+				new CustomEvent('logout', {
+					bubbles: true,
+					composed: true,
+				})
+			);
+		}
 	}
 }
 

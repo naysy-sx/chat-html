@@ -1,7 +1,7 @@
-// src/features/settings/ui/settings-view.css.js
+// src/features/profile/ui/profile-view.css.js
 import { css } from 'lit';
 
-export const settingsViewStyles = css`
+export const profileViewStyles = css`
 	:host {
 		display: block;
 		max-width: 800px;

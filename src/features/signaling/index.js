@@ -1,11 +1,9 @@
 // src/features/signaling/index.js
 
 import { createActor } from 'xstate';
-// Используем фабрику, как было в V1, так как импортируется именно она
 import { createSignalingMachine } from './signaling.machine.js';
 import { SignalingService } from './signaling.service.js';
 
-// URL по умолчанию (твоя Cloud Function)
 const DEFAULT_SERVER_URL =
 	'https://functions.yandexcloud.net/d4eembfgfpdabtj2no3m';
 
@@ -14,9 +12,8 @@ export const signalingFeature = {
 	name: 'Signaling',
 	version: '2.0.0',
 
-	// ✅ Только auth, без settings
-	// Settings может получить актор через eventBus SIGNALING_READY событие
-	dependencies: ['auth'],
+	// ✅ ИЗМЕНЕНО: Убираем зависимость от identity, берём из auth
+	dependencies: ['persistence', 'auth'],
 
 	async onMount(mountContext) {
 		console.log('📡 Mounting Signaling feature...');
@@ -24,25 +21,20 @@ export const signalingFeature = {
 		const { featureRegistry, eventBus, actorRegistry } = mountContext;
 
 		const authResult = featureRegistry.getMountResult('auth');
-		// Settings может быть еще не смонтирована, но мы получим её через подписку позже
-		let settingsResult = featureRegistry.getMountResult('settings');
+		let profileResult = featureRegistry.getMountResult('profile');
 
 		if (!authResult?.actor) {
 			console.error('❌ Auth feature required for signaling');
 			return;
 		}
 
-		// Переменные состояния модуля
 		let currentActor = null;
 		let currentService = null;
 
-		// --- Вспомогательные функции ---
-
-		// Получить URL: сначала ищем в настройках, если нет — дефолтный
 		const getServerUrl = () => {
-			if (!settingsResult?.actor) return DEFAULT_SERVER_URL;
+			if (!profileResult?.actor) return DEFAULT_SERVER_URL;
 
-			const settingsSnapshot = settingsResult.actor.getSnapshot();
+			const settingsSnapshot = profileResult.actor.getSnapshot();
 			const activeServerId = settingsSnapshot.context.activeServerId;
 			const servers = settingsSnapshot.context.signalingServers || [];
 			const server = servers.find((s) => s.id === activeServerId);
@@ -50,12 +42,56 @@ export const signalingFeature = {
 			return server?.url || DEFAULT_SERVER_URL;
 		};
 
-		// Получить профиль
 		const getProfile = () => {
-			return settingsResult?.actor?.getSnapshot().context.profile || null;
+			// Prefer settings profile when available
+			const settingsProfile =
+				profileResult?.actor?.getSnapshot().context.profile;
+			if (settingsProfile) return settingsProfile;
+
+			// Fallback to auth user info (username) so invites contain a display name
+			try {
+				const user = authResult.getUser?.();
+				if (user && user.username) {
+					return {
+						displayName: user.username,
+						username: user.username,
+						bio: '',
+						avatar: null,
+					};
+				}
+			} catch (err) {
+				console.warn('⚠️ getProfile fallback failed:', err.message || err);
+			}
+
+			return null;
 		};
 
-		// Остановка актора
+		// ✅ ИСПРАВЛЕНО: Берём identity из AUTH, а не из identity feature!
+		const getIdentityFromAuth = () => {
+			const authSnapshot = authResult.actor.getSnapshot();
+			const identity = authSnapshot.context.identity;
+
+			if (!identity) {
+				console.warn('⚠️ No identity in auth context');
+				return null;
+			}
+
+			// identity из auth уже имеет структуру { userId, identity, exchange, ... }
+			// или может быть в старом формате - проверяем
+			console.log('📡 Getting identity from auth:', {
+				hasUserId: !!identity.userId,
+				hasExchange: !!identity.exchange,
+				keys: Object.keys(identity),
+			});
+
+			return {
+				userId: identity.userId,
+				identity: identity.identity,
+				exchange: identity.exchange,
+				version: identity.version,
+			};
+		};
+
 		const stopActor = () => {
 			if (currentActor) {
 				console.log('📡 Stopping Signaling Actor...');
@@ -71,19 +107,27 @@ export const signalingFeature = {
 			}
 		};
 
-		// Запуск актора
-		const startActor = (identity) => {
-			if (currentActor) return; // Уже запущен
+		const startActor = () => {
+			if (currentActor) return;
+
+			// ✅ ИСПРАВЛЕНО: Используем identity из auth!
+			const identity = getIdentityFromAuth();
+			if (!identity || !identity.userId) {
+				console.warn('⚠️ Cannot start signaling: no identity in auth');
+				return;
+			}
 
 			console.log('📡 Starting Signaling Actor...');
+			console.log('📡 Identity from AUTH:', {
+				userId: identity.userId?.slice(0, 16) + '...',
+				hasExchangeKey: !!identity.exchange?.publicKey,
+			});
+
 			const url = getServerUrl();
 			console.log('📡 Target URL:', url);
 
-			// 1. Создаем сервис
 			currentService = new SignalingService(url);
 
-			// 2. Создаем машину через фабрику (передаем зависимости)
-			// Важно: здесь мы передаем зависимости так, как это обычно делается в фабриках XState
 			const machine = createSignalingMachine({
 				service: currentService,
 				identity: identity,
@@ -91,14 +135,12 @@ export const signalingFeature = {
 				eventBus: eventBus,
 			});
 
-			// 3. Создаем и запускаем актора
 			currentActor = createActor(machine);
 			currentActor.start();
 
-			// 4. Сразу инициируем подключение
+			console.log('📡 Sending CONNECT event');
 			currentActor.send({ type: 'CONNECT' });
 
-			// 5. Регистрируем
 			if (actorRegistry) {
 				actorRegistry.register('signaling', currentActor, {
 					type: 'feature',
@@ -106,40 +148,48 @@ export const signalingFeature = {
 				});
 			}
 
-			// 6. Уведомляем систему
-			console.log(
-				'📡 Dispatching SIGNALING_READY event with actor:',
-				currentActor
-			);
+			console.log('📡 Dispatching SIGNALING_READY event');
 			eventBus.dispatch({ type: 'SIGNALING_READY', actor: currentActor });
+
+			const snapshot = currentActor.getSnapshot();
+			console.log('📡 Machine initial state:', snapshot.value);
 		};
 
-		// --- Подписки (Subscriptions) ---
-
-		// 1. Логика Авторизации (Auth)
+		// Подписка на Auth
 		const handleAuthChange = (snapshot) => {
 			const state = snapshot.value;
-			// Проверяем, авторизован ли пользователь (учитываем вложенные состояния xstate)
 			const isAuthenticated =
 				state === 'authenticated' ||
 				(typeof state === 'object' && 'authenticated' in state);
 
-			if (isAuthenticated && snapshot.context.identity) {
-				// Если пользователь есть и актора нет — создаем
-				if (!currentActor) {
-					startActor(snapshot.context.identity);
+			console.log(
+				'📡 Auth state changed:',
+				state,
+				'isAuthenticated:',
+				isAuthenticated
+			);
+
+			if (isAuthenticated) {
+				// ✅ Проверяем что identity есть в контексте
+				const identity = snapshot.context.identity;
+				console.log(
+					'📡 Auth identity available:',
+					!!identity,
+					identity?.userId?.slice(0, 16) + '...'
+				);
+
+				if (!currentActor && identity) {
+					startActor();
 				}
 			} else {
-				// Если вышли — убиваем сигналинг
 				stopActor();
 			}
 		};
 
 		const authSubscription = authResult.actor.subscribe(handleAuthChange);
-		// Инициализация при старте (если юзер уже залогинен)
 		handleAuthChange(authResult.actor.getSnapshot());
 
-		// 2. Логика обновления профиля
+		// Остальные подписки без изменений
 		const onProfileUpdated = (event) => {
 			if (currentActor) {
 				currentActor.send({
@@ -150,40 +200,33 @@ export const signalingFeature = {
 		};
 		eventBus.on('PROFILE_UPDATED', onProfileUpdated);
 
-		// 2б. Логика обновления ссылки на settings когда он смонтируется
-		const onSettingsReady = (event) => {
+		const onProfileReady = (event) => {
 			console.log('📡 Settings ready, updating reference');
 			if (event.actor) {
-				settingsResult = { actor: event.actor };
+				profileResult = { actor: event.actor };
 			}
 		};
-		eventBus.on('SETTINGS_READY', onSettingsReady);
+		eventBus.on('PROFILE_READY', onProfileReady);
 
-		// 3. Логика смены сервера
 		const onServerChanged = (event) => {
 			console.log('📡 Switching signaling server to:', event.serverUrl);
 
-			// Если актор запущен, нужно его перезапустить с новым URL
 			if (currentActor) {
-				const identity = authResult.actor.getSnapshot().context.identity;
 				stopActor();
-
-				// Небольший таймаут, чтобы сокеты успели закрыться
 				setTimeout(() => {
-					startActor(identity);
+					startActor();
 				}, 100);
 			}
 		};
 		eventBus.on('SIGNALING_SERVER_CHANGED', onServerChanged);
 
-		// Возвращаем методы управления жизненным циклом
 		return {
 			getActor: () => currentActor,
 			getService: () => currentService,
 			cleanup: () => {
 				authSubscription.unsubscribe();
 				eventBus.off('PROFILE_UPDATED', onProfileUpdated);
-				eventBus.off('SETTINGS_READY', onSettingsReady);
+				eventBus.off('PROFILE_READY', onProfileReady);
 				eventBus.off('SIGNALING_SERVER_CHANGED', onServerChanged);
 				stopActor();
 			},
@@ -196,6 +239,5 @@ export const signalingFeature = {
 	},
 };
 
-// Экспортируем вспомогательные модули для других частей приложения
 export { SignalingService } from './signaling.service.js';
 export { createSignalingMachine } from './signaling.machine.js';

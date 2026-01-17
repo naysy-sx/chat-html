@@ -1,6 +1,6 @@
-// src/features/settings/settings.repository.js
+// src/features/profile/profile.repository.js
 
-export class SettingsRepository {
+export class ProfileRepository {
 	constructor(persistenceService) {
 		this.storage = persistenceService;
 	}

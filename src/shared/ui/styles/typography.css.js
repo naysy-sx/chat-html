@@ -36,14 +36,29 @@ export const typographyStyles = css`
 			monospace;
 
 		/* ===== Spacing (Fluid/Adaptive) ===== */
-		--space-3xs: clamp(0.25rem, 0.2rem + 0.2vw, 0.375rem);
-		--space-2xs: clamp(0.375rem, 0.3rem + 0.3vw, 0.5rem);
-		--space-xs: clamp(0.5rem, 0.45rem + 0.25vw, 0.625rem);
-		--space-s: clamp(0.625rem, 0.55rem + 0.35vw, 0.875rem);
-		--space-m: clamp(0.875rem, 0.8rem + 0.4vw, 1.125rem);
-		--space-l: clamp(1.25rem, 1.1rem + 0.7vw, 1.75rem);
-		--space-xl: clamp(1.75rem, 1.5rem + 1.2vw, 2.5rem);
-		--space-2xl: clamp(2.5rem, 2rem + 2vw, 4rem);
+		--spacing-scale: var(--app-spacing-scale, 1);
+		--space-3xs: calc(
+			clamp(0.25rem, 0.2rem + 0.2vw, 0.375rem) * var(--spacing-scale)
+		);
+		--space-2xs: calc(
+			clamp(0.375rem, 0.3rem + 0.3vw, 0.5rem) * var(--spacing-scale)
+		);
+		--space-xs: calc(
+			clamp(0.5rem, 0.45rem + 0.25vw, 0.625rem) * var(--spacing-scale)
+		);
+		--space-s: calc(
+			clamp(0.625rem, 0.55rem + 0.35vw, 0.875rem) * var(--spacing-scale)
+		);
+		--space-m: calc(
+			clamp(0.875rem, 0.8rem + 0.4vw, 1.125rem) * var(--spacing-scale)
+		);
+		--space-l: calc(
+			clamp(1.25rem, 1.1rem + 0.7vw, 1.75rem) * var(--spacing-scale)
+		);
+		--space-xl: calc(
+			clamp(1.75rem, 1.5rem + 1.2vw, 2.5rem) * var(--spacing-scale)
+		);
+		--space-2xl: calc(clamp(2.5rem, 2rem + 2vw, 4rem) * var(--spacing-scale));
 	}
 
 	/* ===== Text Utilities ===== */

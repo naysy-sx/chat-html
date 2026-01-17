@@ -1,7 +1,11 @@
 // src/main.js
 
+console.log('=== MAIN.JS LOADED ===');
+
 import './styles/global.css';
 import { bootstrap } from './runtime/bootstrap.js';
+
+console.log('=== BOOTSTRAP IMPORTED ===');
 
 // UI компоненты загружаются динамически через features
 // Но auth.ui.js нужен сразу для shell

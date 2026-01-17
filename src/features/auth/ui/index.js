@@ -1,7 +1,6 @@
 // src/features/auth/ui/index.js
 
 export { AuthScreen } from './auth-screen.js';
-export { ProfileScreen } from './profile-screen.js';
 
 // Компоненты (на случай если понадобятся отдельно)
 export { AuthLoading } from './components/auth-loading.js';

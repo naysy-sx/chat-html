@@ -21,12 +21,19 @@ export function createSignalingMachine({
 	eventBus,
 }) {
 	// Извлекаем данные из identity
+	// identity это объект { userId, identity, exchange, version }
 	const userId = identity?.userId;
 
 	// Публичный ключ для обмена (ECDH) — отправляем контактам
 	const exchangePublicKey = identity?.exchange?.publicKey
 		? JSON.stringify(identity.exchange.publicKey)
 		: null;
+
+	console.log('🔐 createSignalingMachine:', {
+		userId: userId?.slice(0, 16) + '...',
+		hasExchangeKey: !!exchangePublicKey,
+		fullIdentity: identity,
+	});
 
 	return setup({
 		actors: {
@@ -153,6 +160,8 @@ export function createSignalingMachine({
 						invite_rejected: 'SIGNALING_INVITE_REJECTED',
 						message: 'SIGNALING_MESSAGE_RECEIVED',
 						contact_deleted: 'SIGNALING_CONTACT_DELETED',
+						contact_blocked: 'SIGNALING_CONTACT_BLOCKED',
+						profile_updated: 'SIGNALING_PROFILE_UPDATED',
 					};
 
 					const busEventType =
@@ -208,13 +217,17 @@ export function createSignalingMachine({
 			// Отправка invite
 			sendInvite: ({ context, event }) => {
 				const { toUserId } = event;
+				// Prefer profile passed with the event (e.g. from ContactsService),
+				// otherwise fallback to actor context.profile
+				const usedProfile = event.profile || context.profile;
 
 				context.service
 					.sendInvite(
 						context.userId,
-						context.profile?.displayName || context.profile?.username || 'User',
+						usedProfile?.displayName || usedProfile?.username || 'User',
 						toUserId,
-						context.exchangePublicKey
+						context.exchangePublicKey,
+						usedProfile // pass the profile payload if available
 					)
 					.then(() => {
 						console.log('✅ Invite sent to:', toUserId.slice(0, 16) + '...');
@@ -236,13 +249,15 @@ export function createSignalingMachine({
 			// Принять invite
 			acceptInvite: ({ context, event }) => {
 				const { toUserId } = event;
+				const usedProfile = event.profile || context.profile;
 
 				context.service
 					.acceptInvite(
 						context.userId,
-						context.profile?.displayName || context.profile?.username || 'User',
+						usedProfile?.displayName || usedProfile?.username || 'User',
 						toUserId,
-						context.exchangePublicKey
+						context.exchangePublicKey,
+						usedProfile // pass profile if available
 					)
 					.then(() => {
 						console.log(
@@ -254,15 +269,27 @@ export function createSignalingMachine({
 						console.error('❌ Failed to accept invite:', err);
 					});
 			},
+			blockContact: ({ context, event }) => {
+				const { toUserId } = event;
 
+				context.service
+					.blockContact(context.userId, toUserId)
+					.then(() => {
+						console.log('🚫 Contact blocked:', toUserId.slice(0, 16) + '...');
+					})
+					.catch((err) => {
+						console.error('❌ Failed to block contact:', err);
+					});
+			},
 			// Отклонить invite
 			rejectInvite: ({ context, event }) => {
 				const { toUserId } = event;
+				const usedProfile = event.profile || context.profile;
 
 				context.service
 					.rejectInvite(
 						context.userId,
-						context.profile?.displayName || context.profile?.username || 'User',
+						usedProfile?.displayName || usedProfile?.username || 'User',
 						toUserId
 					)
 					.then(() => {
@@ -303,6 +330,33 @@ export function createSignalingMachine({
 					});
 			},
 
+			// Отправить профиль всем контактам
+			broadcastProfile: ({ context, event }) => {
+				const { contactIds, profile } = event;
+
+				if (!contactIds || contactIds.length === 0) {
+					console.log('📢 No contacts to broadcast profile to');
+					return;
+				}
+
+				const usedProfile = profile || context.profile;
+
+				context.service
+					.broadcastProfile(context.userId, contactIds, usedProfile)
+					.then(() => {
+						console.log(
+							`✅ Profile broadcasted to ${contactIds.length} contacts`
+						);
+						context.eventBus?.dispatch({
+							type: 'SIGNALING_PROFILE_BROADCASTED',
+							count: contactIds.length,
+						});
+					})
+					.catch((err) => {
+						console.error('❌ Failed to broadcast profile:', err);
+					});
+			},
+
 			// Уведомить об удалении контакта
 			notifyContactDeleted: ({ context, event }) => {
 				const { toUserId } = event;
@@ -327,8 +381,15 @@ export function createSignalingMachine({
 
 		guards: {
 			canRetry: ({ context }) => context.retryCount < 5,
-			hasIdentity: ({ context }) =>
-				!!context.userId && !!context.exchangePublicKey,
+			hasIdentity: ({ context }) => {
+				const ok = !!context.userId && !!context.exchangePublicKey;
+				console.log('🔐 Guard hasIdentity:', {
+					userId: !!context.userId,
+					exchangePublicKey: !!context.exchangePublicKey,
+					result: ok,
+				});
+				return ok;
+			},
 		},
 
 		delays: {
@@ -353,6 +414,9 @@ export function createSignalingMachine({
 
 		states: {
 			idle: {
+				entry: () => {
+					console.log('📡 Machine: entering idle state');
+				},
 				on: {
 					CONNECT: {
 						target: 'connecting',
@@ -362,7 +426,14 @@ export function createSignalingMachine({
 			},
 
 			connecting: {
-				entry: 'clearError',
+				entry: [
+					'clearError',
+					() => {
+						console.log(
+							'📡 Machine: entering connecting state, registering...'
+						);
+					},
+				],
 				invoke: {
 					src: 'register',
 					input: ({ context }) => ({
@@ -382,6 +453,7 @@ export function createSignalingMachine({
 			},
 
 			connected: {
+				entry: () => console.log('📡 Machine: entering connected state'),
 				type: 'parallel',
 
 				states: {
@@ -433,9 +505,9 @@ export function createSignalingMachine({
 					REJECT_INVITE: { actions: 'rejectInvite' },
 					SEND_MESSAGE: { actions: 'sendMessage' },
 					SEND_PROFILE: { actions: 'sendProfile' },
+					BROADCAST_PROFILE: { actions: 'broadcastProfile' },
 					CONTACT_DELETED: { actions: 'notifyContactDeleted' },
-
-					// Обновления
+					BLOCK_CONTACT: { actions: 'blockContact' },
 					UPDATE_PROFILE: { actions: 'updateProfile' },
 
 					// Смена сервера — отключаемся, обновляем сервис

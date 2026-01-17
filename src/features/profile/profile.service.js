@@ -1,6 +1,6 @@
-// src/features/settings/settings.service.js
+// src/features/profile/profile.service.js
 
-export class SettingsService {
+export class ProfileService {
 	// Константы
 	static DEFAULT_SIGNALING_SERVER =
 		'https://functions.yandexcloud.net/d4eembfgfpdabtj2no3m';
@@ -187,7 +187,7 @@ export class SettingsService {
 		return [
 			{
 				id: 'default',
-				url: SettingsService.DEFAULT_SIGNALING_SERVER,
+				url: ProfileService.DEFAULT_SIGNALING_SERVER,
 				isDefault: true,
 				label: 'Сервер разработчика',
 			},

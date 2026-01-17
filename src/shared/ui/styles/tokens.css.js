@@ -9,7 +9,7 @@ import { css } from 'lit';
 export const tokens = css`
 	:host {
 		/* ===== Color Palette Base (Hue Values) ===== */
-		--hue-primary: 270;
+		--hue-primary: var(--app-hue, 270);
 		--hue-danger: 0;
 		--hue-success: 142;
 		--hue-warning: 38;

@@ -1,19 +1,19 @@
-// src/features/settings/index.js
+// src/features/profile/index.js
 
 import { createActor } from 'xstate';
-import { createSettingsMachine } from './settings.machine.js';
-import { SettingsRepository } from './settings.repository.js';
-import { SettingsService } from './settings.service.js';
+import { createProfileMachine } from './profile.machine.js';
+import { ProfileRepository } from './profile.repository.js';
+import { ProfileService } from './profile.service.js';
 
-export const settingsFeature = {
-	id: 'settings',
-	name: 'Settings',
+export const profileFeature = {
+	id: 'profile',
+	name: 'Profile',
 	version: '1.0.0',
 
 	dependencies: ['persistence', 'auth'],
 
 	async onMount(mountContext) {
-		console.log('⚙️ Mounting Settings feature...');
+		console.log('⚙️ Mounting Profile feature...');
 
 		const persistenceResult =
 			mountContext.featureRegistry.getMountResult('persistence');
@@ -24,28 +24,28 @@ export const settingsFeature = {
 		}
 
 		// Храним ссылку на текущий запущенный актор
-		let currentSettingsActor = null;
+		let currentProfileActor = null;
 
 		// --- Функция запуска актора ---
 		const startActor = (username, identity) => {
 			// Если актор уже есть - ничего не делаем (или перезапускаем, если юзер сменился)
-			if (currentSettingsActor) {
-				const snapshot = currentSettingsActor.getSnapshot();
+			if (currentProfileActor) {
+				const snapshot = currentProfileActor.getSnapshot();
 				if (snapshot.context.username === username) {
-					return currentSettingsActor;
+					return currentProfileActor;
 				}
 				// Если юзер другой - останавливаем старый
 				stopActor();
 			}
 
-			console.log('👤 Initializing Settings for user:', username);
+			console.log('👤 Initializing Profile for user:', username);
 
-			const repo = new SettingsRepository(persistenceResult.service);
-			const service = new SettingsService();
+			const repo = new ProfileRepository(persistenceResult.service);
+			const service = new ProfileService();
 			const authService = authResult.authService;
 			const authRepo = authResult.authRepo;
 
-			const settingsMachine = createSettingsMachine({
+			const profileMachine = createProfileMachine({
 				repo,
 				service,
 				username,
@@ -55,16 +55,16 @@ export const settingsFeature = {
 				eventBus: mountContext.eventBus,
 			});
 
-			const actor = createActor(settingsMachine);
+			const actor = createActor(profileMachine);
 			actor.start();
-			currentSettingsActor = actor;
+			currentProfileActor = actor;
 
 			// Регистрируем (перезаписываем) в реестре
 			// ВАЖНО: ActorRegistry теперь отслеживает жизненный цикл актора
 			if (mountContext.actorRegistry) {
-				mountContext.actorRegistry.register('settings', actor, {
+				mountContext.actorRegistry.register('profile', actor, {
 					type: 'feature',
-					feature: 'settings',
+					feature: 'profile',
 					username: username,
 				});
 			}
@@ -72,7 +72,7 @@ export const settingsFeature = {
 			// Оповещаем UI через EventBus
 			if (mountContext.eventBus) {
 				mountContext.eventBus.dispatch({
-					type: 'SETTINGS_READY',
+					type: 'PROFILE_READY',
 					actor: actor,
 					username: username,
 				});
@@ -83,10 +83,10 @@ export const settingsFeature = {
 
 		// --- Функция остановки актора ---
 		const stopActor = () => {
-			if (currentSettingsActor) {
-				console.log('🛑 Stopping Settings Actor (Logout/Switch)...');
-				currentSettingsActor.stop();
-				currentSettingsActor = null;
+			if (currentProfileActor) {
+				console.log('🛑 Stopping Profile Actor (Logout/Switch)...');
+				currentProfileActor.stop();
+				currentProfileActor = null;
 			}
 		};
 
@@ -120,11 +120,11 @@ export const settingsFeature = {
 		return {
 			// Текущий актор (может быть null если гость)
 			// ActorRegistry будет использовать это значение при регистрации
-			actor: currentSettingsActor,
+			actor: currentProfileActor,
 
 			// Дополнительно: функция для получения текущего актора
 			// (используется в getMountResult().getActor?.())
-			getActor: () => currentSettingsActor,
+			getActor: () => currentProfileActor,
 
 			// Подписка на auth для отписки при umount
 			subscription,
@@ -146,14 +146,14 @@ export const settingsFeature = {
 		// Останавливаем актор
 		const actor = context.getActor?.() || context.actor;
 		if (actor) {
-			console.log('  - Stopping settings actor');
+			console.log('  - Stopping profile actor');
 			try {
 				actor.stop();
 			} catch (e) {
-				console.error('[Settings] Error stopping actor:', e);
+				console.error('[Profile] Error stopping actor:', e);
 			}
 		}
 
-		console.log('⚙️ Settings feature unmounted');
+		console.log('⚙️ Profile feature unmounted');
 	},
 };
